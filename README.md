@@ -1,6 +1,3 @@
-# FinLens
-Analyze Bank Statement
-
 # FinLens — AI Bank Statement Analyzer
 
 > Decode your spending in seconds. Upload any Indian bank statement and get a full financial breakdown powered by Claude AI.
