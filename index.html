@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinLens — Bank Statement Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0d12;
+    --surface: #111620;
+    --surface2: #161d2a;
+    --border: #1e2a3a;
+    --accent: #00e5c8;
+    --accent3: #ffd166;
+    --accent4: #a78bfa;
+    --text: #e8f0fe;
+    --text2: #7a8fa8;
+    --text3: #4a5e72;
+    --green: #00c896;
+    --red: #ff5252;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(0,229,200,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,200,0.03) 1px, transparent 1px);
+    background-size: 48px 48px; pointer-events: none; z-index: 0;
+  }
+  .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+  /* Header */
+  header { padding: 32px 0 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .logo { display: flex; align-items: baseline; gap: 8px; }
+  .logo-text { font-family: 'DM Serif Display', serif; font-size: 28px; letter-spacing: -0.5px; }
+  .logo-text span { color: var(--accent); }
+  .logo-tag { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--accent); background: rgba(0,229,200,0.08); border: 1px solid rgba(0,229,200,0.2); padding: 2px 8px; border-radius: 20px; letter-spacing: 1px; }
+  .header-banks { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); letter-spacing: 0.5px; }
+
+  /* Upload */
+  .upload-section { padding: 56px 0 40px; }
+  .upload-headline { font-family: 'DM Serif Display', serif; font-size: clamp(36px, 5vw, 56px); line-height: 1.1; margin-bottom: 14px; letter-spacing: -1px; }
+  .upload-headline em { font-style: italic; color: var(--accent); }
+  .upload-sub { color: var(--text2); font-size: 15px; margin-bottom: 40px; line-height: 1.6; }
+  .bank-selector { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .bank-btn { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; padding: 8px 18px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text2); cursor: pointer; transition: all 0.2s; }
+  .bank-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .bank-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,200,0.08); }
+  .upload-zone { border: 1.5px dashed var(--border); border-radius: 20px; padding: 56px 40px; text-align: center; cursor: pointer; transition: all 0.3s; background: var(--surface); position: relative; overflow: hidden; }
+  .upload-zone::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, rgba(0,229,200,0.07) 0%, transparent 70%); opacity: 0; transition: opacity 0.3s; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(0,229,200,0.025); }
+  .upload-zone:hover::before, .upload-zone.dragover::before { opacity: 1; }
+  .upload-icon { width: 64px; height: 64px; margin: 0 auto 20px; background: rgba(0,229,200,0.08); border: 1px solid rgba(0,229,200,0.2); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+  .upload-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+  .upload-desc { color: var(--text2); font-size: 13px; font-family: 'DM Mono', monospace; }
+  .upload-badges { display: flex; gap: 8px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+  .badge { font-family: 'DM Mono', monospace; font-size: 11px; padding: 4px 12px; border-radius: 20px; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); }
+  #fileInput { display: none; }
+  .error-banner { background: rgba(255,82,82,0.08); border: 1px solid rgba(255,82,82,0.2); border-radius: 12px; padding: 14px 18px; font-size: 13px; color: var(--red); margin-bottom: 20px; display: none; font-family: 'DM Mono', monospace; }
+  .error-banner.visible { display: block; }
+
+  /* Password Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(5,8,14,0.88); backdrop-filter: blur(8px); z-index: 1000; display: none; align-items: center; justify-content: center; }
+  .modal-overlay.visible { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 36px; width: 100%; max-width: 420px; margin: 24px; animation: fadeUp 0.3s ease; box-shadow: 0 40px 80px rgba(0,0,0,0.6); }
+  .modal-icon { width: 56px; height: 56px; border-radius: 14px; background: rgba(255,209,102,0.1); border: 1px solid rgba(255,209,102,0.25); display: flex; align-items: center; justify-content: center; font-size: 26px; margin-bottom: 20px; }
+  .modal-title { font-family: 'DM Serif Display', serif; font-size: 22px; margin-bottom: 8px; }
+  .modal-desc { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 16px; }
+  .modal-filename { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--accent3); background: rgba(255,209,102,0.07); border: 1px solid rgba(255,209,102,0.15); padding: 6px 12px; border-radius: 8px; margin-bottom: 20px; word-break: break-all; }
+  .pw-input-wrap { position: relative; margin-bottom: 8px; }
+  .pw-input { width: 100%; background: var(--surface2); border: 1.5px solid var(--border); border-radius: 12px; padding: 14px 48px 14px 16px; font-family: 'DM Mono', monospace; font-size: 14px; color: var(--text); outline: none; transition: border-color 0.2s; letter-spacing: 2px; }
+  .pw-input:focus { border-color: var(--accent); }
+  .pw-input.error-shake { animation: shake 0.4s ease; border-color: var(--red); }
+  .pw-toggle { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text3); font-size: 16px; padding: 4px; }
+  .pw-hint { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); margin-bottom: 20px; line-height: 1.5; }
+  .pw-hint.error { color: var(--red); }
+  .modal-actions { display: flex; gap: 10px; }
+  .btn-primary { flex: 1; font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; padding: 13px; border-radius: 12px; border: none; background: var(--accent); color: #0a0d12; cursor: pointer; transition: opacity 0.2s; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-secondary { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 600; padding: 13px 20px; border-radius: 12px; border: 1.5px solid var(--border); background: transparent; color: var(--text2); cursor: pointer; transition: all 0.2s; }
+  .btn-secondary:hover { border-color: var(--text2); color: var(--text); }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)} }
+
+  /* Loading */
+  .loading-screen { display: none; padding: 80px 0; text-align: center; }
+  .loading-screen.visible { display: block; }
+  .loader-ring { width: 72px; height: 72px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; margin: 0 auto 24px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-family: 'DM Serif Display', serif; font-size: 24px; margin-bottom: 8px; }
+  .loading-sub { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text3); }
+  .loading-steps { margin-top: 32px; display: flex; flex-direction: column; gap: 8px; max-width: 320px; margin-left: auto; margin-right: auto; }
+  .step-item { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 10px; text-align: left; opacity: 0; transition: opacity 0.5s; }
+  .step-item.active { opacity: 1; color: var(--accent); }
+  .step-item.done { opacity: 0.5; color: var(--text2); }
+  .step-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+  /* Results */
+  .results { display: none; padding: 40px 0 80px; }
+  .results.visible { display: block; }
+  .results-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; gap: 20px; flex-wrap: wrap; }
+  .results-title { font-family: 'DM Serif Display', serif; font-size: 32px; letter-spacing: -0.5px; }
+  .results-meta { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text3); margin-top: 6px; }
+  .new-btn { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; padding: 10px 20px; border-radius: 10px; border: 1.5px solid var(--border); background: transparent; color: var(--text2); cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .new-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Summary strip */
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 18px; position: relative; overflow: hidden; }
+  .stat-card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .stat-card.income::after { background: var(--green); }
+  .stat-card.expense::after { background: var(--red); }
+  .stat-card.balance::after { background: var(--accent); }
+  .stat-card.salary::after { background: var(--accent3); }
+  .stat-card.txn::after { background: var(--accent4); }
+  .stat-card.savings::after { background: #60efbc; }
+  .stat-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3); letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 10px; }
+  .stat-value { font-family: 'DM Serif Display', serif; font-size: 24px; letter-spacing: -0.5px; }
+  .stat-card.income .stat-value { color: var(--green); }
+  .stat-card.expense .stat-value { color: var(--red); }
+  .stat-card.balance .stat-value { color: var(--accent); }
+  .stat-card.salary .stat-value { color: var(--accent3); }
+  .stat-card.txn .stat-value { color: var(--accent4); }
+  .stat-card.savings .stat-value { color: #60efbc; }
+  .stat-sub { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3); margin-top: 6px; }
+
+  /* Tabs */
+  .tab-bar { display: flex; gap: 2px; margin-bottom: 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .tab-btn { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; padding: 10px 18px; border: none; background: none; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.2s; border-radius: 6px 6px 0 0; }
+  .tab-btn:hover { color: var(--text2); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Cards */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .one-col { margin-bottom: 16px; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 22px; }
+  .card-title { font-size: 11px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; color: var(--text2); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+  .card-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Category bars */
+  .cat-item { margin-bottom: 13px; }
+  .cat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .cat-name { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .cat-meta { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text2); display: flex; gap: 8px; }
+  .cat-pct { color: var(--text3); }
+  .cat-bar-bg { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .cat-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 1s cubic-bezier(0.4,0,0.2,1); width: 0%; }
+
+  /* Income items */
+  .income-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--surface2); border-radius: 10px; margin-bottom: 8px; gap: 12px; }
+  .income-left { display: flex; align-items: center; gap: 12px; }
+  .income-icon { width: 36px; height: 36px; border-radius: 10px; background: rgba(0,200,150,0.1); border: 1px solid rgba(0,200,150,0.2); display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .income-label { font-size: 13px; font-weight: 600; }
+  .income-sub { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .income-amount { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--green); }
+
+  /* Transactions */
+  .txn-item { display: flex; align-items: center; justify-content: space-between; padding: 11px 10px; border-radius: 10px; transition: background 0.15s; gap: 10px; }
+  .txn-item:hover { background: var(--surface2); }
+  .txn-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+  .txn-icon { width: 34px; height: 34px; border-radius: 9px; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .txn-desc { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .txn-date { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3); margin-top: 2px; }
+  .txn-right { text-align: right; flex-shrink: 0; }
+  .txn-amount { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; }
+  .txn-amount.credit { color: var(--green); }
+  .txn-amount.debit { color: var(--red); }
+  .txn-bal { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+  /* DC split */
+  .dc-split { margin-bottom: 18px; }
+  .dc-labels { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .dc-bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; display: flex; }
+  .dc-bar-c { height: 100%; background: var(--green); transition: width 1s ease; }
+  .dc-bar-d { height: 100%; background: var(--red); transition: width 1s ease; }
+  .dc-stats { display: flex; justify-content: space-between; margin-top: 20px; }
+  .dc-stat { text-align: center; }
+  .dc-stat-val { font-family: 'DM Serif Display', serif; font-size: 20px; }
+  .dc-stat-label { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3); margin-top: 4px; text-transform: uppercase; }
+  .dc-divider { width: 1px; background: var(--border); }
+
+  /* Insights */
+  .insight-item { display: flex; gap: 14px; padding: 13px 14px; background: var(--surface2); border-radius: 11px; margin-bottom: 10px; }
+  .insight-item.warn { border-left: 3px solid var(--accent3); }
+  .insight-item.good { border-left: 3px solid var(--green); }
+  .insight-item.info { border-left: 3px solid var(--accent); }
+  .insight-item.bad { border-left: 3px solid var(--red); }
+  .insight-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .insight-text { font-size: 13px; line-height: 1.6; color: var(--text2); }
+  .insight-text strong { color: var(--text); font-weight: 700; }
+
+  /* Trend */
+  .trend-wrap { margin-top: 4px; }
+  .trend-bars { display: flex; align-items: flex-end; gap: 6px; height: 72px; }
+  .trend-bar-group { flex: 1; display: flex; flex-direction: column; gap: 2px; justify-content: flex-end; height: 72px; }
+  .chart-bar { border-radius: 3px 3px 0 0; opacity: 0.7; min-height: 4px; cursor: pointer; transition: opacity 0.2s; }
+  .chart-bar:hover { opacity: 1; }
+  .chart-bar.cb { background: var(--green); }
+  .chart-bar.db { background: var(--red); }
+  .trend-labels { display: flex; gap: 6px; margin-top: 6px; }
+  .trend-lbl { flex: 1; text-align: center; font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3); }
+  .chart-legend { display: flex; gap: 16px; margin-top: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+  /* Ring */
+  .ring-wrap { display: flex; align-items: center; gap: 20px; }
+  .ring-bg { fill: none; stroke: var(--border); stroke-width: 8; }
+  .ring-fill { fill: none; stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset 1.2s ease; }
+  .ring-info-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .ring-info-row:last-child { border-bottom: none; }
+  .ring-info-key { font-size: 12px; color: var(--text2); }
+  .ring-info-val { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; }
+
+  /* Data Table */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table th { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text3); padding: 10px 14px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .data-table th:first-child { text-align: left; }
+  .data-table td { padding: 11px 14px; text-align: right; border-bottom: 1px solid rgba(30,42,58,0.5); font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .data-table td:first-child { text-align: left; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: var(--text); }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .data-table .cr { color: var(--green); }
+  .data-table .dr { color: var(--red); }
+  .data-table .nt { color: var(--accent); }
+  .data-table .sv { color: #60efbc; }
+  .data-table tfoot td { border-top: 1px solid var(--border); border-bottom: none; font-weight: 700; color: var(--text); font-family: 'Syne', sans-serif; font-size: 12px; }
+
+  /* Yearly bar chart */
+  .yr-chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; padding: 0 4px; }
+  .yr-group { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0; }
+  .yr-bars { display: flex; gap: 3px; align-items: flex-end; height: 100px; }
+  .yr-bar { border-radius: 3px 3px 0 0; min-height: 4px; transition: opacity 0.2s, height 0.9s ease; opacity: 0.75; cursor: pointer; position: relative; }
+  .yr-bar:hover { opacity: 1; }
+  .yr-bar:hover::after { content: attr(title); position: absolute; bottom: 105%; left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-family: 'DM Mono', monospace; font-size: 10px; white-space: nowrap; pointer-events: none; z-index: 10; }
+  .yr-lbl { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3); margin-top: 6px; text-align: center; }
+  .yr-bar.cr-bar { background: var(--green); width: 14px; }
+  .yr-bar.dr-bar { background: var(--red); width: 14px; }
+  .yr-bar.sv-bar { background: #60efbc; width: 10px; }
+
+  /* Category heatmap */
+  .heat-table { width: 100%; border-collapse: collapse; }
+  .heat-table th { font-family: 'DM Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: center; white-space: nowrap; }
+  .heat-table th:first-child { text-align: left; }
+  .heat-table td { padding: 8px 10px; text-align: center; border-bottom: 1px solid rgba(30,42,58,0.4); font-family: 'DM Mono', monospace; font-size: 11px; position: relative; }
+  .heat-table td:first-child { text-align: left; font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 600; color: var(--text2); white-space: nowrap; }
+  .heat-table tr:last-child td { border-bottom: none; }
+  .heat-cell { display: inline-block; padding: 3px 7px; border-radius: 5px; font-size: 11px; min-width: 56px; }
+
+  
+
+  /* Anim */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-up { animation: fadeUp 0.5s ease forwards; }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Password Modal -->
+<div class="modal-overlay" id="pwModal">
+  <div class="modal">
+    <div class="modal-icon" id="pwModalIcon">🔐</div>
+    <div class="modal-title" id="pwModalTitle">Password Protected PDF</div>
+    <div class="modal-desc">This statement is encrypted. Enter the password below — it will be verified before analysis begins.</div>
+    <div class="modal-filename" id="pwFilename"></div>
+
+    <!-- Step 1: Enter password -->
+    <div id="pwStep1">
+      <div class="pw-input-wrap">
+        <input class="pw-input" id="pwInput" type="password" placeholder="Enter PDF password…" autocomplete="off" />
+        <button class="pw-toggle" id="pwToggle" title="Show/hide">👁</button>
+      </div>
+      <div class="pw-hint" id="pwHint">Common formats: <strong>DDMMYYYY</strong> (DOB) · Last 4 digits of mobile · Account number</div>
+      <div class="modal-actions">
+        <button class="btn-primary" id="pwVerify">🔓 Verify Password</button>
+        <button class="btn-secondary" id="pwCancel">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Verifying spinner -->
+    <div id="pwStep2" style="display:none;text-align:center;padding:16px 0 24px">
+      <div style="width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px"></div>
+      <div style="font-family:'DM Mono',monospace;font-size:13px;color:var(--text2)">Verifying password…</div>
+    </div>
+
+    <!-- Step 3: Unlocked success -->
+    <div id="pwStep3" style="display:none">
+      <div style="background:rgba(0,200,150,0.08);border:1px solid rgba(0,200,150,0.25);border-radius:12px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
+        <span style="font-size:22px">✅</span>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--green)">Password correct — PDF unlocked</div>
+          <div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3);margin-top:4px" id="pwPageCount"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-primary" id="pwAnalyze">📊 Analyze Statement</button>
+        <button class="btn-secondary" id="pwRetry">Try Different Password</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <header>
+    <div class="logo">
+      <div class="logo-text">Fin<span>Lens</span></div>
+      <div class="logo-tag">AI</div>
+    </div>
+    <div class="header-banks">HDFC · ICICI · SBI · AXIS · KOTAK · +more</div>
+  </header>
+    <div class="apikey-text">
+      <strong>Anthropic API Key Required</strong>
+      <span>Get your free key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent3)">console.anthropic.com</a> · Stored locally in your browser, never sent anywhere else</span>
+    </div>
+    <div id="apikeyEnterRow" class="apikey-input-wrap">
+      <input class="apikey-input" id="apikeyInput" type="password" placeholder="sk-ant-api03-…" autocomplete="off" />
+      <button class="apikey-save-btn" id="apikeySaveBtn">Save Key</button>
+    </div>
+    <div class="apikey-saved-row" id="apikeySavedRow">
+      <span class="apikey-saved-badge">✓ API Key saved</span>
+      <button class="apikey-change-btn" id="apikeyChangeBtn">change</button>
+    </div>
+  </div>
+
+  <!-- Upload -->
+  <div class="upload-section" id="uploadSection">
+    <div class="upload-headline">Decode your <em>spending</em><br>in seconds.</div>
+    <div class="upload-sub">Upload your bank statement PDF or CSV. AI extracts every transaction,<br>maps salary &amp; income, and categorizes all debits and credits.</div>
+
+    <div class="bank-selector">
+      <button class="bank-btn active" data-bank="auto">🔍 Auto Detect</button>
+      <button class="bank-btn" data-bank="hdfc">HDFC Bank</button>
+      <button class="bank-btn" data-bank="icici">ICICI Bank</button>
+      <button class="bank-btn" data-bank="sbi">SBI</button>
+      <button class="bank-btn" data-bank="axis">Axis Bank</button>
+      <button class="bank-btn" data-bank="kotak">Kotak</button>
+    </div>
+
+    <div class="error-banner" id="errorBanner"></div>
+
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-icon">📊</div>
+      <div class="upload-title">Drop your bank statement here</div>
+      <div class="upload-desc">or click to browse · PDF or CSV</div>
+      <div class="upload-badges">
+        <span class="badge">PDF</span>
+        <span class="badge">CSV</span>
+        <span class="badge">🔒 Password-Protected PDFs</span>
+        <span class="badge">⚡ Processed Locally</span>
+      </div>
+    </div>
+    <input type="file" id="fileInput" accept=".pdf,.csv,.xls,.xlsx" />
+  </div>
+
+  <!-- Loading -->
+  <div class="loading-screen" id="loadingScreen">
+    <div class="loader-ring"></div>
+    <div class="loading-text">Analyzing your statement…</div>
+    <div class="loading-sub">This usually takes 10–20 seconds</div>
+    <div class="loading-steps">
+      <div class="step-item" id="step1"><div class="step-dot"></div>Unlocking &amp; reading document</div>
+      <div class="step-item" id="step2"><div class="step-dot"></div>Extracting all transactions</div>
+      <div class="step-item" id="step3"><div class="step-dot"></div>Detecting salary &amp; income sources</div>
+      <div class="step-item" id="step4"><div class="step-dot"></div>Categorizing all debits &amp; credits</div>
+      <div class="step-item" id="step5"><div class="step-dot"></div>Generating financial insights</div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="results-header">
+      <div>
+        <div class="results-title">Statement Analysis</div>
+        <div class="results-meta" id="resultsMeta"></div>
+      </div>
+      <button class="new-btn" onclick="resetApp()">↩ New Analysis</button>
+    </div>
+    <div class="summary-grid" id="summaryGrid"></div>
+    <div class="tab-bar" id="tabBar">
+      <button class="tab-btn active" data-tab="overview">Overview</button>
+      <button class="tab-btn" data-tab="yearly">📅 Yearly</button>
+      <button class="tab-btn" data-tab="income">Income</button>
+      <button class="tab-btn" data-tab="spending">Spending</button>
+      <button class="tab-btn" data-tab="transactions">Transactions</button>
+      <button class="tab-btn" data-tab="upi">📲 UPI Apps</button>
+      <button class="tab-btn" data-tab="insights">Insights</button>
+    </div>
+    <div class="tab-panel active" id="tab-overview"></div>
+    <div class="tab-panel" id="tab-yearly"></div>
+    <div class="tab-panel" id="tab-income"></div>
+    <div class="tab-panel" id="tab-spending"></div>
+    <div class="tab-panel" id="tab-transactions"></div>
+    <div class="tab-panel" id="tab-upi"></div>
+    <div class="tab-panel" id="tab-insights"></div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let selectedBank = 'auto', pendingFile = null, pendingAB = null;
+
+// Bank selector
+document.querySelectorAll('.bank-btn').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.bank-btn').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); selectedBank = b.dataset.bank;
+}));
+
+// Tabs
+document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab-btn').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById('tab-' + b.dataset.tab).classList.add('active');
+}));
+
+// Upload
+const uploadZone = document.getElementById('uploadZone');
+const fileInput  = document.getElementById('fileInput');
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+// Password modal
+const pwModal = document.getElementById('pwModal');
+const pwInput = document.getElementById('pwInput');
+const pwHint  = document.getElementById('pwHint');
+let unlockedText = null; // stores extracted text after successful verification
+
+function pwShowStep(n) {
+  [1,2,3].forEach(i => document.getElementById('pwStep'+i).style.display = i===n ? (n===2?'block':'block') : 'none');
+}
+
+document.getElementById('pwToggle').addEventListener('click', () => { pwInput.type = pwInput.type === 'password' ? 'text' : 'password'; });
+document.getElementById('pwCancel').addEventListener('click', () => {
+  pwModal.classList.remove('visible'); pendingFile = null; pendingAB = null; unlockedText = null; pwInput.value = '';
+});
+document.getElementById('pwVerify').addEventListener('click', verifyPassword);
+pwInput.addEventListener('keydown', e => { if(e.key === 'Enter') verifyPassword(); });
+
+document.getElementById('pwRetry').addEventListener('click', () => {
+  unlockedText = null; pwInput.value = ''; pwInput.classList.remove('error-shake');
+  pwHint.innerHTML = 'Common formats: <strong>DDMMYYYY</strong> (DOB) · Last 4 digits of mobile · Account number';
+  pwShowStep(1); setTimeout(() => pwInput.focus(), 50);
+});
+
+document.getElementById('pwAnalyze').addEventListener('click', () => {
+  if (!unlockedText) return;
+  pwModal.classList.remove('visible');
+  showLoading();
+  analyzeWithClaude(pendingFile, unlockedText, 'text').catch(e => { hideLoading(); showError(e.message || 'Analysis failed.'); });
+  unlockedText = null;
+});
+
+async function verifyPassword() {
+  const pw = pwInput.value;
+  if (!pw) { shakePw('Please enter a password'); return; }
+  pwShowStep(2);
+  try {
+    const text = await extractPdfTextWithPageCount(pendingAB, pw);
+    unlockedText = text.content;
+    document.getElementById('pwPageCount').textContent =
+      `${text.pages} page${text.pages !== 1 ? 's' : ''} extracted · Ready to analyze`;
+    pwShowStep(3);
+  } catch(e) {
+    pwShowStep(1);
+    if (e.name === 'PasswordException') shakePw('Incorrect password — please try again');
+    else shakePw('Could not read PDF: ' + (e.message || 'unknown error'));
+  }
+}
+
+function shakePw(msg) {
+  pwInput.classList.remove('error-shake'); void pwInput.offsetWidth; pwInput.classList.add('error-shake');
+  pwHint.innerHTML = '<span style="color:var(--red)">⚠ ' + msg + '</span>';
+  setTimeout(() => { pwHint.innerHTML = 'Common formats: <strong>DDMMYYYY</strong> (DOB) · Last 4 digits of mobile · Account number'; }, 4000);
+}
+
+function openPwModal(file) {
+  document.getElementById('pwFilename').textContent = file.name;
+  pwInput.value = ''; pwInput.classList.remove('error-shake'); unlockedText = null;
+  pwHint.innerHTML = 'Common formats: <strong>DDMMYYYY</strong> (DOB) · Last 4 digits of mobile · Account number';
+  pwShowStep(1);
+  pwModal.classList.add('visible');
+  setTimeout(() => pwInput.focus(), 100);
+}
+function showError(msg) { const b = document.getElementById('errorBanner'); b.textContent = '⚠ ' + msg; b.classList.add('visible'); }
+function hideError() { document.getElementById('errorBanner').classList.remove('visible'); }
+
+// File handler
+async function handleFile(file) {
+  hideError();
+  const ext = file.name.split('.').pop().toLowerCase();
+  if(!['pdf','csv','xls','xlsx'].includes(ext)) { showError('Please upload a PDF or CSV bank statement.'); return; }
+  if(ext !== 'pdf') {
+    const text = await readText(file);
+    showLoading();
+    analyzeWithClaude(file, text, 'text').catch(e => { hideLoading(); showError(e.message || 'Analysis failed.'); });
+    return;
+  }
+  const ab = await readAB(file);
+  // Store as Uint8Array — ArrayBuffer gets detached by PDF.js on first use
+  pendingAB = new Uint8Array(ab); pendingFile = file;
+  try {
+    const text = await extractPdfText(pendingAB, null);
+    showLoading();
+    analyzeWithClaude(file, text, 'text').catch(e => { hideLoading(); showError(e.message || 'Analysis failed.'); });
+  } catch(e) {
+    if(e.name === 'PasswordException') {
+      openPwModal(file);
+    } else {
+      // fallback: try as base64
+      const b64 = await readB64(file);
+      showLoading();
+      analyzeWithClaude(file, b64, 'pdf').catch(err => { hideLoading(); showError(err.message || 'Analysis failed.'); });
+    }
+  }
+}
+
+async function extractPdfText(bytes, password) {
+  // slice() creates a fresh copy — PDF.js detaches the buffer it receives
+  const data = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes);
+  const task = pdfjsLib.getDocument({ data, password: password || undefined });
+  const pdf = await task.promise;
+  let out = '';
+  for(let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const tc = await page.getTextContent();
+    out += tc.items.map(x => x.str).join(' ') + '\n';
+  }
+  return out;
+}
+
+async function extractPdfTextWithPageCount(bytes, password) {
+  const data = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes);
+  const task = pdfjsLib.getDocument({ data, password: password || undefined });
+  const pdf = await task.promise;
+  let out = '';
+  for(let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const tc = await page.getTextContent();
+    out += tc.items.map(x => x.str).join(' ') + '\n';
+  }
+  return { content: out, pages: pdf.numPages };
+}
+
+function readText(f) { return new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=()=>rej(new Error('Read failed')); r.readAsText(f); }); }
+function readAB(f) { return new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=()=>rej(new Error('Read failed')); r.readAsArrayBuffer(f); }); }
+function readB64(f) { return new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result.split(',')[1]); r.onerror=()=>rej(new Error('Read failed')); r.readAsDataURL(f); }); }
+
+// Loading steps
+let stepIdx=0, stepTimer=null;
+const STEPS = ['step1','step2','step3','step4','step5'];
+function showLoading() {
+  document.getElementById('uploadSection').style.display = 'none';
+  document.getElementById('loadingScreen').classList.add('visible');
+  stepIdx = 0; STEPS.forEach(s => document.getElementById(s).className = 'step-item');
+  animSteps();
+}
+function animSteps() {
+  if(stepIdx < STEPS.length) {
+    if(stepIdx > 0) document.getElementById(STEPS[stepIdx-1]).className = 'step-item done';
+    document.getElementById(STEPS[stepIdx]).className = 'step-item active';
+    stepIdx++; stepTimer = setTimeout(animSteps, 3000);
+  }
+}
+function hideLoading() {
+  clearTimeout(stepTimer);
+  document.getElementById('loadingScreen').classList.remove('visible');
+  // Restore upload section if results aren't showing (i.e. analysis failed)
+  if (!document.getElementById('results').classList.contains('visible')) {
+    document.getElementById('uploadSection').style.display = 'block';
+  }
+}
+function showError(msg) {
+  if (!msg) return;
+  const b = document.getElementById('errorBanner');
+  b.textContent = '⚠ ' + msg;
+  b.classList.add('visible');
+  // Make sure upload section is visible so the error can be seen
+  document.getElementById('uploadSection').style.display = 'block';
+}
+function resetApp() {
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('uploadSection').style.display = 'block';
+  fileInput.value = ''; hideError();
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+  document.querySelectorAll('.tab-panel').forEach((p,i) => p.classList.toggle('active', i===0));
+}
+
+// Claude API
+async function analyzeWithClaude(file, content, type) {
+  hideError();
+  const bankHint = selectedBank !== 'auto' ? `The bank is ${selectedBank.toUpperCase()}.` : '';
+
+  const sys = `You are an expert financial analyst for Indian bank statements.
+Return ONLY a valid JSON object — no markdown fences, no explanation, no text before or after the JSON.
+
+Required JSON structure (omit any key whose value would be null/empty/zero):
+{
+  "bank": "string",
+  "period": "string e.g. Jan 2015 – Dec 2024",
+  "account_holder": "string or null",
+  "account_number": "last 4 digits or null",
+  "summary": {
+    "total_credits": number,
+    "total_debits": number,
+    "net_change": number,
+    "opening_balance": number,
+    "closing_balance": number,
+    "total_transactions": number,
+    "debit_count": number,
+    "credit_count": number,
+    "savings_rate": number,
+    "avg_monthly_debit": number,
+    "avg_monthly_credit": number
+  },
+  "salary": {
+    "detected": boolean,
+    "amount": number,
+    "frequency": "monthly|quarterly|irregular",
+    "employer": "string or null",
+    "credit_dates": ["DD Mon"],
+    "total_received": number
+  },
+  "income_sources": [
+    {"name": "string", "emoji": "emoji", "amount": number, "count": number}
+  ],
+  "expense_categories": [
+    {"name": "string", "emoji": "emoji", "amount": number, "count": number, "percentage": number}
+  ],
+  "top_transactions": [
+    {"description": "string", "date": "DD MMM YYYY", "amount": number, "type": "debit|credit", "category": "string", "emoji": "emoji", "balance_after": number}
+  ],
+  "monthly_data": [
+    {"month": "MMM YYYY", "credits": number, "debits": number}
+  ],
+  "yearly_data": [
+    {
+      "year": "YYYY",
+      "credits": number,
+      "debits": number,
+      "net": number,
+      "savings_rate": number,
+      "txn_count": number,
+      "top_category": "string",
+      "categories": {"Category Name": number}
+    }
+  ],
+  "upi_analysis": {
+    "total_upi_debit": number,
+    "total_upi_credit": number,
+    "upi_debit_count": number,
+    "upi_credit_count": number,
+    "upi_share_of_debits": number,
+    "apps": [
+      {"name": "string", "emoji": "emoji", "sent": number, "received": number, "txn_count": number, "top_merchants": ["string"]}
+    ],
+    "top_upi_payees": [
+      {"name": "string", "app": "string", "amount": number, "count": number, "type": "debit|credit"}
+    ],
+    "upi_insights": [
+      {"text": "string", "type": "info|good|warn|bad"}
+    ]
+  },
+  "insights": [
+    {"text": "string with <strong>bold</strong> highlights", "type": "info|good|warn|bad"}
+  ]
+}
+
+STRICT RULES:
+1. yearly_data: one object per calendar year present in the statement — never aggregate, never skip a year
+2. monthly_data: one object per month present
+3. expense_categories: only categories with amount > 0; percentage = share of total_debits
+4. income_sources: only sources with amount > 0
+5. upi_analysis.apps: only apps actually seen in narrations (PhonePe/PHONEPE, GPay/Google Pay/GOOGLEPAY, CRED, Paytm/PAYTM, Amazon Pay, BHIM, iMobile, etc.)
+6. insights: 5-6 specific insights with actual INR numbers
+7. upi_insights: 3-4 insights about UPI patterns
+8. All monetary amounts: plain integers or decimals, NO ₹ symbol, NO commas
+9. Return ONLY the JSON — absolutely nothing else
+${bankHint}`;
+
+  let messages;
+  if (type === 'pdf') {
+    messages = [{ role: 'user', content: [
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: content } },
+      { type: 'text', text: 'Analyze this bank statement. Return only the JSON.' }
+    ]}];
+  } else {
+    // Chunk large text — send up to 80k chars
+    const chunk = content.substring(0, 80000);
+    messages = [{ role: 'user', content: `Analyze this bank statement. Return only the JSON.\n\n${chunk}` }];
+  }
+
+  const resp = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 16000,
+      system: sys,
+      messages
+    })
+  });
+
+  if (!resp.ok) {
+    const e = await resp.json().catch(() => ({}));
+    throw new Error(e.error?.message || `API error ${resp.status}`);
+  }
+
+  const data = await resp.json();
+
+  // Check if response was cut off
+  if (data.stop_reason === 'max_tokens') {
+    console.warn('Response hit max_tokens — JSON may be incomplete');
+  }
+
+  const txt = data.content.map(b => b.text || '').join('').trim();
+
+  // Try to extract JSON robustly
+  let parsed;
+  try {
+    // Strip markdown fences if any
+    const clean = txt.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/,'').trim();
+    // Find first { and last } to handle any stray text
+    const start = clean.indexOf('{');
+    const end = clean.lastIndexOf('}');
+    if (start === -1 || end === -1) throw new Error('No JSON object found in response');
+    parsed = JSON.parse(clean.slice(start, end + 1));
+  } catch (e) {
+    console.error('Parse error:', e.message);
+    console.error('Raw response:', txt.substring(0, 500));
+    throw new Error(`Analysis failed: ${e.message}. The statement may be too large — try a shorter date range.`);
+  }
+
+  hideLoading();
+  renderResults(parsed, file.name);
+}
+
+// Helpers
+function fmt(n) {
+  if(!n && n!==0) return '—';
+  const a=Math.abs(n);
+  if(a>=10000000) return '₹'+(n/10000000).toFixed(2)+' Cr';
+  if(a>=100000)   return '₹'+(n/100000).toFixed(2)+' L';
+  if(a>=1000)     return '₹'+(n/1000).toFixed(1)+'K';
+  return '₹'+Number(n).toLocaleString('en-IN');
+}
+function pct(a,b){ return b>0?Math.round(a/b*100):0; }
+
+// Render
+function renderResults(d, filename) {
+  const s = d.summary||{}, sal = d.salary||{};
+  document.getElementById('resultsMeta').textContent =
+    `${d.bank||'Bank'} · ${d.period||''} · ${d.account_holder ? d.account_holder+' · ':'' }${filename}`;
+
+  const savRate = s.savings_rate || (s.total_credits>0 ? pct(Math.max(0,s.net_change||0), s.total_credits) : 0);
+  const cards = [
+    {cls:'income',  label:'Total Credits', val:fmt(s.total_credits), sub:`${s.credit_count||0} credit txns`},
+    {cls:'expense', label:'Total Debits',  val:fmt(s.total_debits),  sub:`${s.debit_count||0} debit txns`},
+    sal.detected!==false && sal.amount>0
+      ? {cls:'salary', label:'Monthly Salary', val:fmt(sal.amount), sub:sal.employer||'Detected'}
+      : {cls:'balance', label:'Net Change', val:fmt(s.net_change), sub:'Credits minus debits'},
+    {cls:'savings', label:'Savings Rate', val:(savRate>0?'+':'')+savRate+'%', sub:'Of total income'},
+    {cls:'txn', label:'Transactions', val:s.total_transactions||0, sub:`${fmt(s.avg_monthly_debit)}/mo avg spend`},
+    s.closing_balance>0
+      ? {cls:'balance', label:'Closing Balance', val:fmt(s.closing_balance), sub:`Opening: ${fmt(s.opening_balance)}`}
+      : {cls:'balance', label:'Net Change', val:fmt(s.net_change), sub:'Credits minus debits'},
+  ];
+  document.getElementById('summaryGrid').innerHTML = cards.map((c,i) => `
+    <div class="stat-card ${c.cls} fade-up" style="animation-delay:${i*0.05}s">
+      <div class="stat-label">${c.label}</div>
+      <div class="stat-value">${c.val}</div>
+      <div class="stat-sub">${c.sub}</div>
+    </div>`).join('');
+
+  buildOverview(d, s, savRate);
+  buildYearly(d);
+  buildIncome(d, s, sal);
+  buildSpending(d, s);
+  buildTransactions(d);
+  buildUPI(d);
+  buildInsights(d);
+
+  document.getElementById('results').classList.add('visible');
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+  document.querySelectorAll('.tab-panel').forEach((p,i) => p.classList.toggle('active', i===0));
+
+  setTimeout(() => {
+    document.querySelectorAll('.cat-bar-fill').forEach(b => { b.style.width = b.dataset.w+'%'; });
+    const bc = document.getElementById('dcBarC'), bd = document.getElementById('dcBarD');
+    const dt = document.getElementById('dcTarget');
+    if(bc&&bd&&dt){ bc.style.width=dt.dataset.cp+'%'; bd.style.width=dt.dataset.dp+'%'; }
+    const ring = document.getElementById('savRing');
+    if(ring) ring.style.strokeDashoffset = ring.dataset.off;
+  }, 300);
+}
+
+function buildOverview(d, s, savRate) {
+  const tc=s.total_credits||0, td=s.total_debits||0;
+  const cp=tc+td>0?pct(tc,tc+td):50, dp=100-cp;
+  const R=40, circ=2*Math.PI*R;
+  const off = circ - Math.max(0,Math.min(100,savRate))/100*circ;
+  const rc = savRate>=20?'var(--green)':savRate>=10?'var(--accent3)':'var(--red)';
+
+  const monthly = d.monthly_data||[];
+  let trendHTML = '';
+  if(monthly.length>1) {
+    const maxV = Math.max(...monthly.map(m=>Math.max(m.credits||0,m.debits||0)))||1;
+    trendHTML = `<div class="card fade-up" style="animation-delay:0.4s;margin-bottom:16px">
+      <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></div>Monthly Credits vs Debits</div>
+      <div class="trend-wrap">
+        <div class="trend-bars">
+          ${monthly.map(m=>`<div class="trend-bar-group">
+            <div class="chart-bar cb" style="height:${Math.round((m.credits||0)/maxV*34)}px" title="${m.month} Credits: ${fmt(m.credits)}"></div>
+            <div class="chart-bar db" style="height:${Math.round((m.debits||0)/maxV*34)}px" title="${m.month} Debits: ${fmt(m.debits)}"></div>
+          </div>`).join('')}
+        </div>
+        <div class="trend-labels">${monthly.map(m=>`<div class="trend-lbl">${m.month}</div>`).join('')}</div>
+      </div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Credits</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Debits</div>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('tab-overview').innerHTML = `
+    <div class="two-col">
+      <div class="card fade-up" style="animation-delay:0.1s">
+        <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>Debit vs Credit Split</div>
+        <div class="dc-split">
+          <div class="dc-labels">
+            <span style="font-size:12px;font-weight:600;color:var(--green)">Credits ${cp}%</span>
+            <span style="font-size:12px;font-weight:600;color:var(--red)">Debits ${dp}%</span>
+          </div>
+          <div class="dc-bar">
+            <div class="dc-bar-c" id="dcBarC" style="width:0%"></div>
+            <div class="dc-bar-d" id="dcBarD" style="width:0%"></div>
+          </div>
+          <div id="dcTarget" data-cp="${cp}" data-dp="${dp}" style="display:none"></div>
+        </div>
+        <div class="dc-stats">
+          <div class="dc-stat"><div class="dc-stat-val" style="color:var(--green)">${fmt(s.total_credits)}</div><div class="dc-stat-label">Total In</div></div>
+          <div class="dc-divider"></div>
+          <div class="dc-stat"><div class="dc-stat-val" style="color:var(--accent)">${fmt(Math.abs(s.net_change||0))}</div><div class="dc-stat-label">${(s.net_change||0)>=0?'Net Gain':'Net Loss'}</div></div>
+          <div class="dc-divider"></div>
+          <div class="dc-stat"><div class="dc-stat-val" style="color:var(--red)">${fmt(s.total_debits)}</div><div class="dc-stat-label">Total Out</div></div>
+        </div>
+      </div>
+      <div class="card fade-up" style="animation-delay:0.2s">
+        <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent3)"></div>Savings Rate</div>
+        <div class="ring-wrap">
+          <svg width="108" height="108" viewBox="0 0 108 108" style="flex-shrink:0">
+            <circle class="ring-bg" cx="54" cy="54" r="${R}"/>
+            <circle class="ring-fill" id="savRing" cx="54" cy="54" r="${R}" stroke="${rc}"
+              stroke-dasharray="${circ}" stroke-dashoffset="${circ}" data-off="${off}" transform="rotate(-90 54 54)"/>
+            <text font-family="DM Serif Display,serif" font-size="18" fill="var(--text)" x="54" y="50" text-anchor="middle" dominant-baseline="middle">${savRate}%</text>
+            <text font-family="DM Mono,monospace" font-size="10" fill="var(--text3)" x="54" y="64" text-anchor="middle">savings</text>
+          </svg>
+          <div style="flex:1">
+            <div class="ring-info-row"><span class="ring-info-key">Opening Balance</span><span class="ring-info-val">${fmt(s.opening_balance)}</span></div>
+            <div class="ring-info-row"><span class="ring-info-key">Closing Balance</span><span class="ring-info-val">${fmt(s.closing_balance)}</span></div>
+            <div class="ring-info-row"><span class="ring-info-key">Avg Monthly Spend</span><span class="ring-info-val" style="color:var(--red)">${fmt(s.avg_monthly_debit)}</span></div>
+            <div class="ring-info-row"><span class="ring-info-key">Avg Monthly Income</span><span class="ring-info-val" style="color:var(--green)">${fmt(s.avg_monthly_credit)}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    ${trendHTML}`;
+}
+
+function buildYearly(d) {
+  const years = d.yearly_data || [];
+  if (!years.length) {
+    document.getElementById('tab-yearly').innerHTML = `
+      <div style="text-align:center;padding:60px;color:var(--text3)">
+        <div style="font-size:40px;margin-bottom:12px">📅</div>
+        <div style="font-size:14px;color:var(--text2)">No yearly data found in this statement</div>
+      </div>`;
+    return;
+  }
+
+  const maxC = Math.max(...years.map(y => y.credits||0)) || 1;
+  const maxD = Math.max(...years.map(y => y.debits||0)) || 1;
+  const maxV = Math.max(maxC, maxD);
+
+  // ── Bar chart ──
+  const chartBars = years.map(y => {
+    const ch = Math.round((y.credits||0)/maxV*96);
+    const dh = Math.round((y.debits||0)/maxV*96);
+    const net = (y.net||0) >= 0;
+    return `<div class="yr-group">
+      <div class="yr-bars">
+        <div class="yr-bar cr-bar" style="height:${ch}px" title="${y.year} Credits: ${fmt(y.credits)}"></div>
+        <div class="yr-bar dr-bar" style="height:${dh}px" title="${y.year} Debits: ${fmt(y.debits)}"></div>
+      </div>
+      <div class="yr-lbl">${y.year}</div>
+    </div>`;
+  }).join('');
+
+  // ── Savings line mini-chart via inline SVG ──
+  const svgW = 900, svgH = 60, pad = 20;
+  const pts = years.map((y,i) => {
+    const x = pad + (i / Math.max(years.length-1,1)) * (svgW - pad*2);
+    const sr = Math.max(-20, Math.min(60, y.savings_rate||0));
+    const y2 = svgH - pad - ((sr + 20) / 80) * (svgH - pad*2);
+    return {x, y:y2, sr, year:y.year};
+  });
+  const polyline = pts.map(p=>`${p.x},${p.y}`).join(' ');
+  const dots = pts.map(p=>`
+    <circle cx="${p.x}" cy="${p.y}" r="4" fill="${p.sr>=20?'var(--green)':p.sr>=0?'var(--accent3)':'var(--red)'}" stroke="var(--bg)" stroke-width="2">
+      <title>${p.year}: ${p.sr}% savings</title>
+    </circle>`).join('');
+  const zeroY = svgH - pad - ((0 + 20) / 80) * (svgH - pad*2);
+  const savingsChart = `
+    <svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:60px;overflow:visible">
+      <line x1="${pad}" y1="${zeroY}" x2="${svgW-pad}" y2="${zeroY}" stroke="var(--border)" stroke-width="1" stroke-dasharray="4,4"/>
+      <polyline points="${polyline}" fill="none" stroke="var(--accent3)" stroke-width="2" stroke-linejoin="round"/>
+      ${dots}
+    </svg>`;
+
+  // ── Summary table ──
+  const totC = years.reduce((s,y)=>s+(y.credits||0),0);
+  const totD = years.reduce((s,y)=>s+(y.debits||0),0);
+  const totN = totC - totD;
+  const tableRows = years.map(y => {
+    const net = (y.net !== undefined ? y.net : (y.credits||0)-(y.debits||0));
+    const sr = y.savings_rate||0;
+    const srColor = sr>=20?'var(--green)':sr>=10?'var(--accent3)':'var(--red)';
+    return `<tr>
+      <td>${y.year}</td>
+      <td class="cr">${fmt(y.credits)}</td>
+      <td class="dr">${fmt(y.debits)}</td>
+      <td class="${net>=0?'nt':'dr'}">${net>=0?'+':''}${fmt(net)}</td>
+      <td><span style="color:${srColor};font-weight:600">${sr}%</span></td>
+      <td>${y.txn_count||'—'}</td>
+      <td style="color:var(--text2)">${y.top_category||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  // ── Category heatmap across years ──
+  const allCats = [...new Set(years.flatMap(y => Object.keys(y.categories||{})))];
+  const catTotals = {};
+  allCats.forEach(c => { catTotals[c] = years.reduce((s,y)=>s+((y.categories||{})[c]||0),0); });
+  const topCats = allCats.filter(c=>catTotals[c]>0).sort((a,b)=>catTotals[b]-catTotals[a]).slice(0,8);
+
+  const heatRows = topCats.map(cat => {
+    const maxAmt = Math.max(...years.map(y=>(y.categories||{})[cat]||0))||1;
+    const cells = years.map(y => {
+      const v = (y.categories||{})[cat]||0;
+      if (!v) return `<td><span style="color:var(--text3);font-size:11px">—</span></td>`;
+      const intensity = Math.round(v/maxAmt*100);
+      const bg = `rgba(0,229,200,${(intensity/100*0.35+0.05).toFixed(2)})`;
+      const textColor = intensity > 60 ? 'var(--text)' : 'var(--text2)';
+      return `<td><span class="heat-cell" style="background:${bg};color:${textColor}">${fmt(v)}</span></td>`;
+    }).join('');
+    return `<tr><td>${cat}</td>${cells}<td class="dr" style="font-weight:700">${fmt(catTotals[cat])}</td></tr>`;
+  }).join('');
+
+  const heatHeader = years.map(y=>`<th>${y.year}</th>`).join('') + '<th>Total</th>';
+
+  document.getElementById('tab-yearly').innerHTML = `
+    <!-- Bar Chart -->
+    <div class="card fade-up" style="margin-bottom:16px;animation-delay:0.05s">
+      <div class="card-title" style="margin-bottom:20px">
+        <div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>
+        Annual Credits vs Debits
+        <div class="chart-legend" style="margin-top:0;margin-left:auto">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Credits</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Debits</div>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <div class="yr-chart" style="min-width:${Math.max(400, years.length*60)}px">${chartBars}</div>
+      </div>
+    </div>
+
+    <!-- Savings rate trend -->
+    <div class="card fade-up" style="margin-bottom:16px;animation-delay:0.1s">
+      <div class="card-title" style="margin-bottom:8px">
+        <div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent3)"></div>
+        Savings Rate Trend (%)
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin-left:auto;font-weight:400">Dots above zero line = saving, below = deficit</span>
+      </div>
+      <div style="overflow-x:auto;padding:4px 0">${savingsChart}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        ${years.map(y=>{
+          const sr=y.savings_rate||0;
+          const c=sr>=20?'var(--green)':sr>=0?'var(--accent3)':'var(--red)';
+          return `<span style="font-family:'DM Mono',monospace;font-size:10px;color:${c};background:rgba(255,255,255,0.04);padding:3px 8px;border-radius:6px;border:1px solid ${c}33">${y.year}: ${sr}%</span>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Summary Table -->
+    <div class="card fade-up" style="margin-bottom:16px;animation-delay:0.15s">
+      <div class="card-title" style="margin-bottom:16px">
+        <div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></div>
+        Year-wise Summary Table
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead><tr>
+            <th>Year</th>
+            <th>Total Credits</th>
+            <th>Total Debits</th>
+            <th>Net</th>
+            <th>Savings %</th>
+            <th>Txns</th>
+            <th>Top Category</th>
+          </tr></thead>
+          <tbody>${tableRows}</tbody>
+          <tfoot><tr>
+            <td>All Years</td>
+            <td class="cr">${fmt(totC)}</td>
+            <td class="dr">${fmt(totD)}</td>
+            <td class="${totN>=0?'nt':'dr'}">${totN>=0?'+':''}${fmt(totN)}</td>
+            <td class="sv">${totC>0?Math.round((Math.max(0,totN)/totC)*100):0}%</td>
+            <td>${years.reduce((s,y)=>s+(y.txn_count||0),0)}</td>
+            <td>—</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Category Heatmap -->
+    ${topCats.length ? `
+    <div class="card fade-up" style="animation-delay:0.2s">
+      <div class="card-title" style="margin-bottom:16px">
+        <div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent4)"></div>
+        Category Spend by Year
+        <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin-left:auto;font-weight:400">Darker = higher spend that year</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="heat-table">
+          <thead><tr><th>Category</th>${heatHeader}</tr></thead>
+          <tbody>${heatRows}</tbody>
+        </table>
+      </div>
+    </div>` : ''}
+  `;
+}
+
+function buildIncome(d, s, sal) {
+  const sources = (d.income_sources||[]).filter(x=>x.amount>0);
+
+  const salaryCard = sal.detected!==false && sal.amount>0 ? `
+    <div class="card fade-up" style="animation-delay:0.1s">
+      <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent3)"></div>Salary Details</div>
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px">
+        <div style="width:52px;height:52px;border-radius:13px;background:rgba(255,209,102,0.1);border:1px solid rgba(255,209,102,0.2);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">💼</div>
+        <div>
+          <div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--accent3)">${fmt(sal.amount)}<span style="font-size:13px;color:var(--text3);font-family:'DM Mono',monospace"> / month</span></div>
+          <div style="font-size:13px;color:var(--text2);margin-top:3px">${sal.employer||'Employer detected'}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="flex:1;min-width:90px;background:var(--surface2);border-radius:10px;padding:12px;text-align:center">
+          <div style="font-family:'DM Serif Display',serif;font-size:19px;color:var(--green)">${fmt(sal.total_received)}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin-top:3px;text-transform:uppercase">Total Received</div>
+        </div>
+        <div style="flex:1;min-width:90px;background:var(--surface2);border-radius:10px;padding:12px;text-align:center">
+          <div style="font-family:'DM Serif Display',serif;font-size:16px;color:var(--accent4);text-transform:capitalize">${sal.frequency||'Monthly'}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin-top:3px;text-transform:uppercase">Frequency</div>
+        </div>
+        ${sal.credit_dates?.length?`<div style="flex:1;min-width:90px;background:var(--surface2);border-radius:10px;padding:12px;text-align:center">
+          <div style="font-family:'DM Serif Display',serif;font-size:15px;color:var(--text)">${sal.credit_dates[0]}</div>
+          <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin-top:3px;text-transform:uppercase">Credit Date</div>
+        </div>`:''}
+      </div>
+    </div>` : `
+    <div class="card fade-up" style="animation-delay:0.1s;border:1.5px dashed var(--border)">
+      <div style="text-align:center;padding:28px 0;color:var(--text3)">
+        <div style="font-size:30px;margin-bottom:10px">🔍</div>
+        <div style="font-size:14px;color:var(--text2)">No regular salary credit detected</div>
+        <div style="font-family:'DM Mono',monospace;font-size:11px;margin-top:6px">Freelance or business income may be present below</div>
+      </div>
+    </div>`;
+
+  const srcHTML = sources.length>0 ? `
+    <div class="card fade-up" style="animation-delay:0.2s">
+      <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></div>All Income Sources · ${fmt(s.total_credits)} total</div>
+      ${sources.map(src=>`
+        <div class="income-item">
+          <div class="income-left"><div class="income-icon">${src.emoji}</div>
+            <div><div class="income-label">${src.name}</div><div class="income-sub">${src.count} transaction${src.count!==1?'s':''}</div></div>
+          </div>
+          <div class="income-amount">${fmt(src.amount)}</div>
+        </div>`).join('')}
+    </div>` : '';
+
+  document.getElementById('tab-income').innerHTML = `<div class="two-col">${salaryCard}${srcHTML}</div>`;
+}
+
+function buildSpending(d, s) {
+  const cats = (d.expense_categories||[]).filter(c=>c.amount>0).sort((a,b)=>b.amount-a.amount);
+  const maxC = cats[0]?.amount||1;
+  document.getElementById('tab-spending').innerHTML = cats.length>0 ? `
+    <div class="one-col">
+      <div class="card fade-up">
+        <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>All Expense Categories · ${fmt(s.total_debits)} total</div>
+        ${cats.map(c=>`
+          <div class="cat-item">
+            <div class="cat-header">
+              <div class="cat-name"><span style="font-size:15px">${c.emoji}</span>${c.name}</div>
+              <div class="cat-meta"><span>${fmt(c.amount)}</span><span class="cat-pct">${c.percentage||pct(c.amount,s.total_debits)}%</span><span style="color:var(--text3);font-size:10px">${c.count} txns</span></div>
+            </div>
+            <div class="cat-bar-bg"><div class="cat-bar-fill" data-w="${Math.min(100,c.amount/maxC*100)}"></div></div>
+          </div>`).join('')}
+      </div>
+    </div>` : '<div style="text-align:center;padding:60px 0;color:var(--text3)">No expense data found</div>';
+}
+
+function buildTransactions(d) {
+  const txns = d.top_transactions||[];
+  const debits = txns.filter(t=>t.type==='debit');
+  const credits = txns.filter(t=>t.type==='credit');
+  const row = t => `
+    <div class="txn-item">
+      <div class="txn-left">
+        <div class="txn-icon">${t.emoji||(t.type==='credit'?'⬇️':'⬆️')}</div>
+        <div>
+          <div class="txn-desc">${t.description}</div>
+          <div class="txn-date">${t.date}${t.category?' · '+t.category:''}</div>
+        </div>
+      </div>
+      <div class="txn-right">
+        <div class="txn-amount ${t.type}">${t.type==='credit'?'+':'-'}${fmt(Math.abs(t.amount))}</div>
+        ${t.balance_after?`<div class="txn-bal">Bal: ${fmt(t.balance_after)}</div>`:''}
+      </div>
+    </div>`;
+  document.getElementById('tab-transactions').innerHTML = `
+    <div class="two-col">
+      <div class="card fade-up" style="animation-delay:0.1s">
+        <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--red)"></div>Top Debits</div>
+        ${debits.length?debits.map(row).join(''):'<div style="color:var(--text3);font-size:13px;padding:12px 0">No debit data</div>'}
+      </div>
+      <div class="card fade-up" style="animation-delay:0.2s">
+        <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--green)"></div>Top Credits</div>
+        ${credits.length?credits.map(row).join(''):'<div style="color:var(--text3);font-size:13px;padding:12px 0">No credit data</div>'}
+      </div>
+    </div>`;
+}
+
+function buildUPI(d) {
+  const u = d.upi_analysis;
+  if (!u || (!u.total_upi_debit && !u.total_upi_credit)) {
+    document.getElementById('tab-upi').innerHTML = `
+      <div style="text-align:center;padding:60px 24px;color:var(--text3)">
+        <div style="font-size:48px;margin-bottom:16px">📲</div>
+        <div style="font-size:16px;color:var(--text2);font-weight:600;margin-bottom:8px">No UPI transactions detected</div>
+        <div style="font-family:'DM Mono',monospace;font-size:12px">UPI payments via PhonePe, Google Pay, CRED etc. will appear here</div>
+      </div>`;
+    return;
+  }
+
+  const apps = (u.apps||[]).filter(a => a.txn_count > 0);
+  const payees = (u.top_upi_payees||[]).slice(0,10);
+  const upiInsights = u.upi_insights||[];
+  const totalUpiFlow = (u.total_upi_debit||0) + (u.total_upi_credit||0);
+  const maxApp = apps.reduce((m,a) => Math.max(m, a.sent+a.received), 0) || 1;
+
+  // App logos/colors map
+  const appMeta = {
+    'phonepe':    { logo:'https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/PhonePe_Logo.png/200px-PhonePe_Logo.png', color:'#5f259f', initials:'Pe' },
+    'google pay': { logo:'', color:'#4285f4', initials:'G' },
+    'gpay':       { logo:'', color:'#4285f4', initials:'G' },
+    'cred':       { logo:'', color:'#1c1c1e', initials:'CR' },
+    'paytm':      { logo:'', color:'#00b9f1', initials:'Pt' },
+    'amazon pay': { logo:'', color:'#ff9900', initials:'Az' },
+    'bhim':       { logo:'', color:'#00529b', initials:'BH' },
+    'other upi':  { logo:'', color:'#00e5c8', initials:'UPI' },
+  };
+  function getAppMeta(name) {
+    const k = (name||'').toLowerCase();
+    return appMeta[k] || appMeta[Object.keys(appMeta).find(x=>k.includes(x))||'other upi'] || { color:'#00e5c8', initials:'UPI' };
+  }
+
+  const summaryRow = `
+    <div class="two-col" style="margin-bottom:16px">
+      <div class="card fade-up" style="animation-delay:0.05s">
+        <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:#a78bfa"></div>UPI Overview</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+          <div style="background:var(--surface2);border-radius:10px;padding:14px;text-align:center">
+            <div style="font-family:'DM Serif Display',serif;font-size:20px;color:var(--red)">${fmt(u.total_upi_debit)}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin-top:4px;text-transform:uppercase">Sent via UPI</div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3)">${u.upi_debit_count||0} txns</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:10px;padding:14px;text-align:center">
+            <div style="font-family:'DM Serif Display',serif;font-size:20px;color:var(--green)">${fmt(u.total_upi_credit)}</div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);margin-top:4px;text-transform:uppercase">Received via UPI</div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3)">${u.upi_credit_count||0} txns</div>
+          </div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;color:var(--text2)">UPI share of total debits</span>
+          <span style="font-family:'DM Mono',monospace;font-size:14px;font-weight:600;color:#a78bfa">${u.upi_share_of_debits||0}%</span>
+        </div>
+      </div>
+
+      <div class="card fade-up" style="animation-delay:0.1s">
+        <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:#a78bfa"></div>Apps Used · ${apps.length} detected</div>
+        ${apps.map(a => {
+          const m = getAppMeta(a.name);
+          const barW = Math.round(((a.sent||0)+(a.received||0))/maxApp*100);
+          return `<div style="margin-bottom:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:32px;height:32px;border-radius:8px;background:${m.color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;letter-spacing:-0.5px;flex-shrink:0">${a.emoji||m.initials}</div>
+                <div>
+                  <div style="font-size:13px;font-weight:700">${a.name}</div>
+                  <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3)">${a.txn_count} txns</div>
+                </div>
+              </div>
+              <div style="text-align:right">
+                ${a.sent>0?`<div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--red)">-${fmt(a.sent)}</div>`:''}
+                ${a.received>0?`<div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--green)">+${fmt(a.received)}</div>`:''}
+              </div>
+            </div>
+            <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${barW}%;background:${m.color};border-radius:2px;transition:width 1s ease"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+
+  const payeesRow = payees.length > 0 ? `
+    <div class="one-col" style="margin-bottom:16px">
+      <div class="card fade-up" style="animation-delay:0.15s">
+        <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent3)"></div>Top UPI Payees &amp; Merchants</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:2px">
+          ${payees.map((p,i) => {
+            const m = getAppMeta(p.app||'');
+            return `<div class="txn-item">
+              <div class="txn-left">
+                <div style="width:34px;height:34px;border-radius:9px;background:${m.color}22;border:1px solid ${m.color}44;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:${m.color};flex-shrink:0">${i+1}</div>
+                <div>
+                  <div class="txn-desc">${p.name}</div>
+                  <div class="txn-date">${p.app||'UPI'} · ${p.count} txn${p.count!==1?'s':''}</div>
+                </div>
+              </div>
+              <div class="txn-right">
+                <div class="txn-amount ${p.type==='credit'?'credit':'debit'}">${p.type==='credit'?'+':'-'}${fmt(Math.abs(p.amount))}</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>` : '';
+
+  const upiInsRow = upiInsights.length > 0 ? `
+    <div class="one-col">
+      <div class="card fade-up" style="animation-delay:0.2s">
+        <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>UPI Insights</div>
+        ${upiInsights.map(i => {
+          const icons = {info:'💡', good:'✅', warn:'⚠️', bad:'🚨'};
+          return `<div class="insight-item ${i.type||'info'}">
+            <div class="insight-icon">${icons[i.type]||'💡'}</div>
+            <div class="insight-text">${i.text}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
+  document.getElementById('tab-upi').innerHTML = summaryRow + payeesRow + upiInsRow;
+}
+
+function buildInsights(d) {
+  const icons = {info:'💡', good:'✅', warn:'⚠️', bad:'🚨'};
+  const ins = d.insights||[];
+  document.getElementById('tab-insights').innerHTML = ins.length>0 ? `
+    <div class="one-col">
+      <div class="card fade-up">
+        <div class="card-title"><div class="card-dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent3)"></div>AI Financial Insights</div>
+        ${ins.map(i=>`
+          <div class="insight-item ${i.type||'info'}">
+            <div class="insight-icon">${icons[i.type]||'💡'}</div>
+            <div class="insight-text">${i.text}</div>
+          </div>`).join('')}
+      </div>
+    </div>` : '<div style="padding:40px;text-align:center;color:var(--text3)">No insights generated</div>';
+}
+</script>
+</body>
+</html>
