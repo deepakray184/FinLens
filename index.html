@@ -50,10 +50,6 @@
   .hero-benefits b { color: var(--green); font-size: 14px; }
   .privacy-note { display: flex; gap: 10px; align-items: flex-start; color: var(--text3); font-size: 11px; line-height: 1.6; margin-top: 14px; max-width: 760px; }
   .privacy-note strong { color: var(--text2); }
-  .bank-selector { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-  .bank-btn { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; padding: 8px 18px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text2); cursor: pointer; transition: all 0.2s; }
-  .bank-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .bank-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,200,0.08); }
   .upload-zone { border: 1.5px dashed var(--border); border-radius: 20px; padding: 48px 32px; text-align: center; cursor: pointer; transition: all 0.3s; background: var(--surface); position: relative; overflow: hidden; }
   .upload-zone::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, rgba(0,229,200,0.07) 0%, transparent 70%); opacity: 0; transition: opacity 0.3s; }
   .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(0,229,200,0.025); }
@@ -321,7 +317,7 @@
       <div class="logo-text">Fin<span>Lens</span></div>
       <div class="logo-tag">LOCAL</div>
     </div>
-    <div class="header-banks">Made for Indian bank statements<br>HDFC · ICICI · SBI · Axis · Kotak</div>
+    <div class="header-banks">Made for Indian bank statements<br>CSV recommended · PDF experimental</div>
   </header>
 
   <!-- Upload -->
@@ -332,16 +328,7 @@
     <div class="hero-benefits" aria-label="What you will see">
       <span><b>✓</b> Spend by category</span>
       <span><b>✓</b> Monthly trends</span>
-      <span><b>✓</b> Searchable transaction details</span>
-    </div>
-
-    <div class="bank-selector">
-      <button class="bank-btn active" data-bank="auto">🔍 Auto Detect</button>
-      <button class="bank-btn" data-bank="hdfc">HDFC Bank</button>
-      <button class="bank-btn" data-bank="icici">ICICI Bank</button>
-      <button class="bank-btn" data-bank="sbi">SBI</button>
-      <button class="bank-btn" data-bank="axis">Axis Bank</button>
-      <button class="bank-btn" data-bank="kotak">Kotak</button>
+      <span><b>✓</b> Top transaction details</span>
     </div>
 
     <div class="error-banner" id="errorBanner"></div>
@@ -405,15 +392,7 @@
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-let selectedBank = 'auto', pendingFile = null, pendingAB = null;
-
-// Bank selector
-document.querySelectorAll('.bank-btn').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('.bank-btn').forEach(x => x.classList.remove('active'));
-  document.querySelectorAll('.bank-btn').forEach(x => x.setAttribute('aria-pressed', 'false'));
-  b.classList.add('active'); selectedBank = b.dataset.bank;
-  b.setAttribute('aria-pressed', 'true');
-}));
+let pendingFile = null, pendingAB = null;
 
 // Tabs
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
@@ -471,10 +450,10 @@ async function verifyPassword() {
   if (!pw) { shakePw('Please enter a password'); return; }
   pwShowStep(2);
   try {
-    const text = await extractPdfTextWithPageCount(pendingAB, pw);
-    unlockedText = text.content;
+    const pdf = await extractPdfText(pendingAB, pw);
+    unlockedText = pdf.content;
     document.getElementById('pwPageCount').textContent =
-      `${text.pages} page${text.pages !== 1 ? 's' : ''} extracted · Ready to analyze`;
+      `${pdf.pages} page${pdf.pages !== 1 ? 's' : ''} extracted · Ready to analyze`;
     pwShowStep(3);
   } catch(e) {
     pwShowStep(1);
@@ -516,10 +495,10 @@ async function handleFile(file) {
     const ab = await readAB(file);
     // Store as Uint8Array — PDF.js detaches the buffer it receives.
     pendingAB = new Uint8Array(ab); pendingFile = file;
-    const text = await extractPdfText(pendingAB, null);
-    if (!text.trim()) throw new Error('No selectable text found. Try exporting the statement as CSV.');
+    const pdf = await extractPdfText(pendingAB, null);
+    if (!pdf.content.trim()) throw new Error('No selectable text found. Try exporting the statement as CSV.');
     showLoading();
-    analyzeStatement(file, text, 'pdf').catch(e => { hideLoading(); showError(e.message || 'Could not analyze this PDF.'); });
+    analyzeStatement(file, pdf.content, 'pdf').catch(e => { hideLoading(); showError(e.message || 'Could not analyze this PDF.'); });
   } catch(e) {
     if(e.name === 'PasswordException') openPwModal(file);
     else showError(e.message || 'Could not read this file. Try exporting it as CSV.');
@@ -539,19 +518,6 @@ function pageLines(items) {
 
 async function extractPdfText(bytes, password) {
   // slice() creates a fresh copy — PDF.js detaches the buffer it receives
-  const data = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes);
-  const task = pdfjsLib.getDocument({ data, password: password || undefined });
-  const pdf = await task.promise;
-  const pages = [];
-  for(let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const tc = await page.getTextContent();
-    pages.push(pageLines(tc.items));
-  }
-  return pages.join('\n');
-}
-
-async function extractPdfTextWithPageCount(bytes, password) {
   const data = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes);
   const task = pdfjsLib.getDocument({ data, password: password || undefined });
   const pdf = await task.promise;
@@ -758,7 +724,7 @@ function pct(a,b){ return b>0?Math.round(a/b*100):0; }
 function renderResults(d, filename) {
   const s = d.summary||{}, sal = d.salary||{};
   document.getElementById('resultsMeta').textContent =
-    `${d.bank||'Bank'} · ${d.period||''} · ${d.account_holder ? d.account_holder+' · ':'' }${filename}`;
+    `${d.bank||'Bank'} · ${d.period||''} · ${filename}`;
 
   const savRate = s.savings_rate || (s.total_credits>0 ? pct(Math.max(0,s.net_change||0), s.total_credits) : 0);
   const topCategory = [...(d.expense_categories||[])].sort((a,b)=>(b.amount||0)-(a.amount||0))[0];
