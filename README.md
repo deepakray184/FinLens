@@ -1,145 +1,30 @@
-# FinLens — AI Bank Statement Analyzer
+# FinLens — Private Bank Statement Analyzer
 
-> Decode your spending in seconds. Upload any Indian bank statement and get a full AI-powered financial breakdown — no API key needed by users.
+FinLens turns a bank statement into a spending summary with category totals, monthly trends, yearly comparisons, and transaction details.
 
-![Status](https://img.shields.io/badge/Status-Active-brightgreen) ![License](https://img.shields.io/badge/License-MIT-blue) ![Powered by Claude](https://img.shields.io/badge/Powered%20by-Claude%20AI-blueviolet)
+## Run on GitHub Pages
 
----
+FinLens is a static site. It needs no Node.js server, package install, API key, or build step.
 
-## Features
+1. Push this repository to GitHub.
+2. Open **Settings → Pages**.
+3. Choose **Deploy from a branch**, select main and /(root), then save.
+4. Open the Pages URL shown in Settings.
 
-- 📊 **Overview** — Credits vs debits, savings rate, monthly trend
-- 📅 **Yearly Trends** — Bar charts, savings line chart, year-wise table, category heatmap
-- 💼 **Income** — Salary detection, all credit sources
-- 🛍️ **Spending** — 15 expense categories with animated breakdown
-- 💸 **Transactions** — Top debits and credits side by side
-- 📲 **UPI Apps** — PhonePe, Google Pay, CRED, Paytm and more
-- 💡 **Insights** — AI-generated financial insights with actual numbers
-- 🔐 **Password-protected PDFs** — 3-step verify → unlock → analyze flow
-- 🏦 **Supports** HDFC, ICICI, SBI, Axis, Kotak and all Indian banks (auto-detect)
+The site entry point is the root index.html.
 
----
+## Use
 
-## Project Structure
+Upload a CSV exported from your bank. FinLens recognizes common columns such as Date, Narration or Description, Debit, Credit, Amount, Type, and Balance. It reads and analyzes the file in your browser; transaction data is not uploaded.
 
-```
-finlens-bank-analyzer/
-├── server.js          ← Express proxy (keeps your API key secret)
-├── package.json
-├── .env.example       ← Copy to .env and add your key
-├── .gitignore
-├── render.yaml        ← One-click Render deploy
-├── railway.json       ← One-click Railway deploy
-├── vercel.json        ← One-click Vercel deploy
-└── public/
-    └── index.html     ← Full frontend (single file)
-```
+PDF support is experimental and works only with text-based PDFs whose transaction rows can be recognized. Scanned PDFs need OCR and are not supported. Password-protected text PDFs can be unlocked in the browser. CSV is recommended.
 
----
+Classification uses local transaction-description rules, so review categories and totals before relying on them. Different banks use different CSV formats; unsupported layouts show an error with the expected columns.
 
-## Local Setup
+## Privacy
 
-### 1. Clone the repo
-```bash
-git clone https://github.com/YOUR_USERNAME/finlens-bank-analyzer.git
-cd finlens-bank-analyzer
-```
-
-### 2. Install dependencies
-```bash
-npm install
-```
-
-### 3. Add your API key
-```bash
-cp .env.example .env
-# Edit .env and paste your key from https://console.anthropic.com
-```
-
-### 4. Run
-```bash
-npm start
-# → http://localhost:3000
-```
-
-For auto-reload during development:
-```bash
-npm run dev
-```
-
----
-
-## Deploy to the Web (Free)
-
-### Option A — Render (recommended, free tier available)
-
-1. Push this repo to GitHub
-2. Go to [render.com](https://render.com) → **New Web Service**
-3. Connect your GitHub repo
-4. Render auto-detects `render.yaml` — just click **Deploy**
-5. Go to **Environment** → add `ANTHROPIC_API_KEY` = your key
-6. Done — your app is live at `https://finlens-xxxx.onrender.com`
-
-### Option B — Railway
-
-1. Go to [railway.app](https://railway.app) → **New Project → Deploy from GitHub**
-2. Select this repo
-3. Go to **Variables** → add `ANTHROPIC_API_KEY`
-4. Railway auto-deploys — live in ~60 seconds
-
-### Option C — Vercel
-
-```bash
-npm i -g vercel
-vercel
-# Follow prompts, then add env var:
-vercel env add ANTHROPIC_API_KEY
-vercel --prod
-```
-
----
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | ✅ Yes | Your key from [console.anthropic.com](https://console.anthropic.com) |
-| `PORT` | No | Server port (default: `3000`) |
-
-> ⚠️ **Never commit your `.env` file.** It's in `.gitignore` by default.
-
----
-
-## How It Works
-
-```
-Browser (user)
-    │  uploads PDF/CSV
-    │  PDF.js decrypts & extracts text locally
-    │
-    ▼
-POST /api/analyze  →  server.js  →  Anthropic Claude API
-                       (adds secret API key)
-    │
-    ▼
-JSON response  →  Browser renders charts, tables, insights
-```
-
-Your API key lives only on the server — users never see it.
-
----
-
-## Tech Stack
-
-| | Technology |
-|---|---|
-| Frontend | Vanilla HTML/CSS/JS, PDF.js, inline SVG charts |
-| Backend | Node.js + Express |
-| AI | Anthropic Claude (`claude-sonnet-4-5`) |
-| Deploy | Render / Railway / Vercel |
-
----
+Statement contents remain on the device. FinLens does not send transactions to an API or store them in a server. The page loads its fonts and PDF.js library from public CDNs.
 
 ## License
 
-MIT — free to use, modify, and deploy.
+MIT
