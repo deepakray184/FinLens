@@ -1,29 +1,44 @@
-# FinLens — Private Bank Statement Analyzer
+# FinLens
 
-FinLens turns a bank statement into a spending summary with category totals, monthly trends, yearly comparisons, and transaction details.
+FinLens is a private, browser-based bank statement analyzer. Choose a statement to see spending categories, income, transaction details, yearly comparisons, UPI activity, and financial insights.
 
-## Run on GitHub Pages
+## Try it on GitHub Pages
 
-FinLens is a static site. It needs no Node.js server, package install, API key, or build step.
+FinLens is a static website: there is no server, build step, account, or API key to configure.
 
-1. Push this repository to GitHub.
-2. Open **Settings → Pages**.
-3. Choose **Deploy from a branch**, select main and /(root), then save.
-4. Open the Pages URL shown in Settings.
+To publish it from this repository:
 
-The site entry point is the root index.html.
+1. Open **Settings → Pages** on GitHub.
+2. Under **Build and deployment**, choose **Deploy from a branch**.
+3. Select the `main` branch and the `/(root)` folder, then save.
+4. Open the Pages URL shown in the Pages settings after deployment completes.
 
-## Use
+The app is served from [`index.html`](index.html) in the repository root.
 
-Upload a CSV exported from your bank. FinLens recognizes common columns such as Date, Narration or Description, Debit, Credit, Amount, Type, and Balance. It reads and analyzes the file in your browser; transaction data is not uploaded.
+## Use FinLens
 
-PDF support is experimental and works only with text-based PDFs whose transaction rows can be recognized. Scanned PDFs need OCR and are not supported. Password-protected text PDFs can be unlocked in the browser. CSV is recommended.
+1. Export your statement from your bank as a CSV file. CSV is recommended.
+2. Open FinLens and choose the CSV file.
+3. Review the overview and use the tabs to explore yearly trends, income, spending categories, transactions, UPI activity, and insights.
 
-Classification uses local transaction-description rules, so review categories and totals before relying on them. Different banks use different CSV formats; unsupported layouts show an error with the expected columns.
+FinLens recognizes common column names, including:
+
+- **Date:** `Date`, `Transaction Date`, or `Value Date`
+- **Description:** `Description`, `Narration`, `Particulars`, or `Remarks`
+- **Amounts:** separate `Debit` and `Credit` columns, or an `Amount` column with a transaction type such as `Type` or `Dr/Cr`
+- **Optional:** `Balance`
+
+The CSV should include a header row and transaction dates in a recognizable format, such as `DD/MM/YYYY` or `YYYY-MM-DD`. If a file is not recognized, export it as CSV with the column headers included.
+
+Text-based PDFs are supported experimentally. Scanned PDFs and image-only statements are not supported because FinLens does not include OCR. Password-protected PDFs can be unlocked in the browser.
 
 ## Privacy
 
-Statement contents remain on the device. FinLens does not send transactions to an API or store them in a server. The page loads its fonts and PDF.js library from public CDNs.
+Statement files are read and analyzed in your browser; FinLens does not send transaction data to a backend or store it on a server. The page loads its fonts and PDF.js (used for PDF reading) from public CDNs. For the best privacy, use a trusted device and a CSV exported directly from your bank.
+
+## Development
+
+Open `index.html` in a modern browser, or serve the repository root with any static web server. No package installation or build command is required.
 
 ## License
 
