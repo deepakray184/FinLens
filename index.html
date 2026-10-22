@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FinLens — Bank Statement Analyzer</title>
+<title>FinLens — Understand Your Spending</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
@@ -40,23 +40,31 @@
 
   /* Upload */
   .upload-section { padding: 56px 0 40px; }
+  .hero-kicker { display: inline-flex; align-items: center; gap: 8px; font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--accent); margin-bottom: 16px; }
+  .hero-kicker::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 12px currentColor; }
   .upload-headline { font-family: 'DM Serif Display', serif; font-size: clamp(36px, 5vw, 56px); line-height: 1.1; margin-bottom: 14px; letter-spacing: -1px; }
   .upload-headline em { font-style: italic; color: var(--accent); }
-  .upload-sub { color: var(--text2); font-size: 15px; margin-bottom: 40px; line-height: 1.6; }
+  .upload-sub { color: var(--text2); font-size: 15px; margin-bottom: 28px; line-height: 1.7; max-width: 650px; }
+  .hero-benefits { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-bottom: 30px; color: var(--text2); font-size: 12px; }
+  .hero-benefits span { display: inline-flex; align-items: center; gap: 7px; }
+  .hero-benefits b { color: var(--green); font-size: 14px; }
+  .privacy-note { display: flex; gap: 10px; align-items: flex-start; color: var(--text3); font-size: 11px; line-height: 1.6; margin-top: 14px; max-width: 760px; }
+  .privacy-note strong { color: var(--text2); }
   .bank-selector { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
   .bank-btn { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600; padding: 8px 18px; border-radius: 10px; border: 1.5px solid var(--border); background: var(--surface); color: var(--text2); cursor: pointer; transition: all 0.2s; }
   .bank-btn:hover { border-color: var(--accent); color: var(--accent); }
   .bank-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,229,200,0.08); }
-  .upload-zone { border: 1.5px dashed var(--border); border-radius: 20px; padding: 56px 40px; text-align: center; cursor: pointer; transition: all 0.3s; background: var(--surface); position: relative; overflow: hidden; }
+  .upload-zone { border: 1.5px dashed var(--border); border-radius: 20px; padding: 48px 32px; text-align: center; cursor: pointer; transition: all 0.3s; background: var(--surface); position: relative; overflow: hidden; }
   .upload-zone::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 0%, rgba(0,229,200,0.07) 0%, transparent 70%); opacity: 0; transition: opacity 0.3s; }
   .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(0,229,200,0.025); }
   .upload-zone:hover::before, .upload-zone.dragover::before { opacity: 1; }
+  .upload-zone:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
   .upload-icon { width: 64px; height: 64px; margin: 0 auto 20px; background: rgba(0,229,200,0.08); border: 1px solid rgba(0,229,200,0.2); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 28px; }
   .upload-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
   .upload-desc { color: var(--text2); font-size: 13px; font-family: 'DM Mono', monospace; }
   .upload-badges { display: flex; gap: 8px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
   .badge { font-family: 'DM Mono', monospace; font-size: 11px; padding: 4px 12px; border-radius: 20px; background: var(--surface2); border: 1px solid var(--border); color: var(--text2); }
-  #fileInput { display: none; }
+  #fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   .error-banner { background: rgba(255,82,82,0.08); border: 1px solid rgba(255,82,82,0.2); border-radius: 12px; padding: 14px 18px; font-size: 13px; color: var(--red); margin-bottom: 20px; display: none; font-family: 'DM Mono', monospace; }
   .error-banner.visible { display: block; }
 
@@ -135,7 +143,7 @@
   /* Cards */
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
   .one-col { margin-bottom: 16px; }
-  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } .container { padding: 0 16px; } header { padding: 22px 0 18px; } .header-banks { max-width: 150px; text-align: right; line-height: 1.7; } .upload-section { padding-top: 38px; } .upload-zone { padding: 38px 18px; } }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 22px; }
   .card-title { font-size: 11px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; color: var(--text2); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
   .card-dot { width: 8px; height: 8px; border-radius: 50%; }
@@ -313,26 +321,19 @@
       <div class="logo-text">Fin<span>Lens</span></div>
       <div class="logo-tag">AI</div>
     </div>
-    <div class="header-banks">HDFC · ICICI · SBI · AXIS · KOTAK · +more</div>
+    <div class="header-banks">Made for Indian bank statements<br>HDFC · ICICI · SBI · Axis · Kotak</div>
   </header>
-    <div class="apikey-text">
-      <strong>Anthropic API Key Required</strong>
-      <span>Get your free key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent3)">console.anthropic.com</a> · Stored locally in your browser, never sent anywhere else</span>
-    </div>
-    <div id="apikeyEnterRow" class="apikey-input-wrap">
-      <input class="apikey-input" id="apikeyInput" type="password" placeholder="sk-ant-api03-…" autocomplete="off" />
-      <button class="apikey-save-btn" id="apikeySaveBtn">Save Key</button>
-    </div>
-    <div class="apikey-saved-row" id="apikeySavedRow">
-      <span class="apikey-saved-badge">✓ API Key saved</span>
-      <button class="apikey-change-btn" id="apikeyChangeBtn">change</button>
-    </div>
-  </div>
 
   <!-- Upload -->
   <div class="upload-section" id="uploadSection">
-    <div class="upload-headline">Decode your <em>spending</em><br>in seconds.</div>
-    <div class="upload-sub">Upload your bank statement PDF or CSV. AI extracts every transaction,<br>maps salary &amp; income, and categorizes all debits and credits.</div>
+    <div class="hero-kicker">A clearer view of your money</div>
+    <div class="upload-headline">Know where your<br><em>money goes.</em></div>
+    <div class="upload-sub">Drop in a bank statement and get a practical spending breakdown: your biggest categories, recurring charges, month-to-month changes, and the transactions behind them.</div>
+    <div class="hero-benefits" aria-label="What you will see">
+      <span><b>✓</b> Spend by category</span>
+      <span><b>✓</b> Monthly trends</span>
+      <span><b>✓</b> Searchable transaction details</span>
+    </div>
 
     <div class="bank-selector">
       <button class="bank-btn active" data-bank="auto">🔍 Auto Detect</button>
@@ -345,18 +346,18 @@
 
     <div class="error-banner" id="errorBanner"></div>
 
-    <div class="upload-zone" id="uploadZone">
-      <div class="upload-icon">📊</div>
+    <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Choose a bank statement PDF or CSV to analyze">
+      <div class="upload-icon">↥</div>
       <div class="upload-title">Drop your bank statement here</div>
-      <div class="upload-desc">or click to browse · PDF or CSV</div>
+      <div class="upload-desc">or click to choose a file</div>
       <div class="upload-badges">
         <span class="badge">PDF</span>
         <span class="badge">CSV</span>
         <span class="badge">🔒 Password-Protected PDFs</span>
-        <span class="badge">⚡ Processed Locally</span>
       </div>
     </div>
-    <input type="file" id="fileInput" accept=".pdf,.csv,.xls,.xlsx" />
+    <input type="file" id="fileInput" accept=".pdf,.csv,application/pdf,text/csv" />
+    <div class="privacy-note"><span aria-hidden="true">🔒</span><span><strong>Your statement is sensitive.</strong> Statement contents are sent to the app server and Anthropic for AI analysis; PDF text is extracted in your browser when possible. Avoid uploading statements you do not have permission to share.</span></div>
   </div>
 
   <!-- Loading -->
@@ -377,7 +378,7 @@
   <div class="results" id="results">
     <div class="results-header">
       <div>
-        <div class="results-title">Statement Analysis</div>
+        <div class="results-title">Your spending snapshot</div>
         <div class="results-meta" id="resultsMeta"></div>
       </div>
       <button class="new-btn" onclick="resetApp()">↩ New Analysis</button>
@@ -385,11 +386,11 @@
     <div class="summary-grid" id="summaryGrid"></div>
     <div class="tab-bar" id="tabBar">
       <button class="tab-btn active" data-tab="overview">Overview</button>
-      <button class="tab-btn" data-tab="yearly">📅 Yearly</button>
+      <button class="tab-btn" data-tab="yearly">Yearly</button>
       <button class="tab-btn" data-tab="income">Income</button>
       <button class="tab-btn" data-tab="spending">Spending</button>
       <button class="tab-btn" data-tab="transactions">Transactions</button>
-      <button class="tab-btn" data-tab="upi">📲 UPI Apps</button>
+      <button class="tab-btn" data-tab="upi">UPI Apps</button>
       <button class="tab-btn" data-tab="insights">Insights</button>
     </div>
     <div class="tab-panel active" id="tab-overview"></div>
@@ -410,7 +411,9 @@ let selectedBank = 'auto', pendingFile = null, pendingAB = null;
 // Bank selector
 document.querySelectorAll('.bank-btn').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('.bank-btn').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.bank-btn').forEach(x => x.setAttribute('aria-pressed', 'false'));
   b.classList.add('active'); selectedBank = b.dataset.bank;
+  b.setAttribute('aria-pressed', 'true');
 }));
 
 // Tabs
@@ -425,10 +428,13 @@ document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (
 const uploadZone = document.getElementById('uploadZone');
 const fileInput  = document.getElementById('fileInput');
 uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+});
 uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
 uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
-fileInput.addEventListener('change', e => { if(e.target.files[0]) handleFile(e.target.files[0]); });
+fileInput.addEventListener('change', e => { if(e.target.files[0]) handleFile(e.target.files[0]); fileInput.value = ''; });
 
 // Password modal
 const pwModal = document.getElementById('pwModal');
@@ -492,35 +498,43 @@ function openPwModal(file) {
   pwModal.classList.add('visible');
   setTimeout(() => pwInput.focus(), 100);
 }
-function showError(msg) { const b = document.getElementById('errorBanner'); b.textContent = '⚠ ' + msg; b.classList.add('visible'); }
 function hideError() { document.getElementById('errorBanner').classList.remove('visible'); }
 
 // File handler
 async function handleFile(file) {
   hideError();
   const ext = file.name.split('.').pop().toLowerCase();
-  if(!['pdf','csv','xls','xlsx'].includes(ext)) { showError('Please upload a PDF or CSV bank statement.'); return; }
-  if(ext !== 'pdf') {
-    const text = await readText(file);
-    showLoading();
-    analyzeWithClaude(file, text, 'text').catch(e => { hideLoading(); showError(e.message || 'Analysis failed.'); });
-    return;
-  }
-  const ab = await readAB(file);
-  // Store as Uint8Array — ArrayBuffer gets detached by PDF.js on first use
-  pendingAB = new Uint8Array(ab); pendingFile = file;
+  if(!['pdf','csv'].includes(ext)) { showError('Choose a PDF or CSV file. Excel files are not supported yet.'); return; }
+  if(file.size > 15 * 1024 * 1024) { showError('This file is larger than 15 MB. Export a smaller date range and try again.'); return; }
   try {
+    if(ext === 'csv') {
+      const text = await readText(file);
+      if (!text.trim()) throw new Error('This CSV is empty.');
+      showLoading();
+      analyzeWithClaude(file, text, 'text').catch(e => { hideLoading(); showError(e.message || 'Analysis failed.'); });
+      return;
+    }
+    const ab = await readAB(file);
+    // Store as Uint8Array — PDF.js detaches the buffer it receives.
+    pendingAB = new Uint8Array(ab); pendingFile = file;
     const text = await extractPdfText(pendingAB, null);
+    if (!text.trim()) throw new Error('No selectable text found. Try exporting the statement as CSV.');
     showLoading();
     analyzeWithClaude(file, text, 'text').catch(e => { hideLoading(); showError(e.message || 'Analysis failed.'); });
   } catch(e) {
-    if(e.name === 'PasswordException') {
-      openPwModal(file);
-    } else {
+    if(e.name === 'PasswordException') openPwModal(file);
+    else if (e.message && e.message.startsWith('No selectable text')) showError(e.message);
+    else if (e.message && e.message.includes('empty')) showError(e.message);
+    else {
       // fallback: try as base64
-      const b64 = await readB64(file);
-      showLoading();
-      analyzeWithClaude(file, b64, 'pdf').catch(err => { hideLoading(); showError(err.message || 'Analysis failed.'); });
+      try {
+        const b64 = await readB64(file);
+        showLoading();
+        analyzeWithClaude(file, b64, 'pdf').catch(err => { hideLoading(); showError(err.message || 'Analysis failed.'); });
+      } catch(readError) {
+        hideLoading();
+        showError(readError.message || 'Could not read this file. Try exporting it again.');
+      }
     }
   }
 }
@@ -763,17 +777,14 @@ function renderResults(d, filename) {
     `${d.bank||'Bank'} · ${d.period||''} · ${d.account_holder ? d.account_holder+' · ':'' }${filename}`;
 
   const savRate = s.savings_rate || (s.total_credits>0 ? pct(Math.max(0,s.net_change||0), s.total_credits) : 0);
+  const topCategory = [...(d.expense_categories||[])].sort((a,b)=>(b.amount||0)-(a.amount||0))[0];
   const cards = [
-    {cls:'income',  label:'Total Credits', val:fmt(s.total_credits), sub:`${s.credit_count||0} credit txns`},
-    {cls:'expense', label:'Total Debits',  val:fmt(s.total_debits),  sub:`${s.debit_count||0} debit txns`},
-    sal.detected!==false && sal.amount>0
-      ? {cls:'salary', label:'Monthly Salary', val:fmt(sal.amount), sub:sal.employer||'Detected'}
-      : {cls:'balance', label:'Net Change', val:fmt(s.net_change), sub:'Credits minus debits'},
-    {cls:'savings', label:'Savings Rate', val:(savRate>0?'+':'')+savRate+'%', sub:'Of total income'},
-    {cls:'txn', label:'Transactions', val:s.total_transactions||0, sub:`${fmt(s.avg_monthly_debit)}/mo avg spend`},
-    s.closing_balance>0
-      ? {cls:'balance', label:'Closing Balance', val:fmt(s.closing_balance), sub:`Opening: ${fmt(s.opening_balance)}`}
-      : {cls:'balance', label:'Net Change', val:fmt(s.net_change), sub:'Credits minus debits'},
+    {cls:'expense', label:'Total spent', val:fmt(s.total_debits), sub:`${s.debit_count||0} debit transactions`},
+    {cls:'txn', label:'Average monthly spend', val:fmt(s.avg_monthly_debit), sub:'Based on statement period'},
+    {cls:'salary', label:'Top spending category', val:topCategory ? fmt(topCategory.amount) : '—', sub:topCategory ? topCategory.name : 'No category data'},
+    {cls:'income', label:'Total income', val:fmt(s.total_credits), sub:`${s.credit_count||0} credit transactions`},
+    {cls:'savings', label:'Savings rate', val:(savRate>0?'+':'')+savRate+'%', sub:'Of total income'},
+    {cls:'balance', label:'Transactions', val:s.total_transactions||0, sub:d.period||'In this statement'},
   ];
   document.getElementById('summaryGrid').innerHTML = cards.map((c,i) => `
     <div class="stat-card ${c.cls} fade-up" style="animation-delay:${i*0.05}s">
