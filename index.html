@@ -6,6 +6,7 @@
 <title>FinLens — Private Spending Analyzer</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #0a0d12;
@@ -324,7 +325,7 @@
   <div class="upload-section" id="uploadSection">
     <div class="hero-kicker">A clearer view of your money</div>
     <div class="upload-headline">Know where your<br><em>money goes.</em></div>
-    <div class="upload-sub">Choose a CSV statement for a local spending breakdown by category, month, and transaction. No account, server, or API key required.</div>
+    <div class="upload-sub">Choose a PDF, spreadsheet, or text statement for a local spending breakdown by category, month, and transaction. No account, server, or API key required.</div>
     <div class="hero-benefits" aria-label="What you will see">
       <span><b>✓</b> Spend by category</span>
       <span><b>✓</b> Monthly trends</span>
@@ -333,16 +334,18 @@
 
     <div class="error-banner" id="errorBanner"></div>
 
-    <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Choose a bank statement PDF or CSV to analyze">
+    <div class="upload-zone" id="uploadZone" role="button" tabindex="0" aria-label="Choose a bank statement file to analyze">
       <div class="upload-icon">↥</div>
       <div class="upload-title">Drop your bank statement here</div>
       <div class="upload-desc">or click to choose a file</div>
       <div class="upload-badges">
         <span class="badge">CSV · best results</span>
+        <span class="badge">Excel · XLS / XLSX</span>
+        <span class="badge">TXT / TSV</span>
         <span class="badge">Text PDFs · experimental</span>
       </div>
     </div>
-    <input type="file" id="fileInput" accept=".pdf,.csv,application/pdf,text/csv" />
+    <input type="file" id="fileInput" accept=".pdf,.csv,.txt,.tsv,.xls,.xlsx,.xlsm,application/pdf,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
     <div class="privacy-note"><span aria-hidden="true">🔒</span><span><strong>Your statement stays on this device.</strong> FinLens reads the file in your browser and computes the breakdown locally. It does not upload your transactions or require an API key.</span></div>
   </div>
 
@@ -418,7 +421,7 @@ fileInput.addEventListener('change', e => { if(e.target.files[0]) handleFile(e.t
 const pwModal = document.getElementById('pwModal');
 const pwInput = document.getElementById('pwInput');
 const pwHint  = document.getElementById('pwHint');
-let unlockedText = null; // stores extracted text after successful verification
+let unlockedPdf = null; // extracted PDF text and layout after successful password verification
 
 function pwShowStep(n) {
   [1,2,3].forEach(i => document.getElementById('pwStep'+i).style.display = i===n ? (n===2?'block':'block') : 'none');
@@ -426,23 +429,24 @@ function pwShowStep(n) {
 
 document.getElementById('pwToggle').addEventListener('click', () => { pwInput.type = pwInput.type === 'password' ? 'text' : 'password'; });
 document.getElementById('pwCancel').addEventListener('click', () => {
-  pwModal.classList.remove('visible'); pendingFile = null; pendingAB = null; unlockedText = null; pwInput.value = '';
+  pwModal.classList.remove('visible'); pendingFile = null; pendingAB = null; unlockedPdf = null; pwInput.value = '';
 });
 document.getElementById('pwVerify').addEventListener('click', verifyPassword);
 pwInput.addEventListener('keydown', e => { if(e.key === 'Enter') verifyPassword(); });
 
 document.getElementById('pwRetry').addEventListener('click', () => {
-  unlockedText = null; pwInput.value = ''; pwInput.classList.remove('error-shake');
+  unlockedPdf = null; pwInput.value = ''; pwInput.classList.remove('error-shake');
   pwHint.innerHTML = 'Common formats: <strong>DDMMYYYY</strong> (DOB) · Last 4 digits of mobile · Account number';
   pwShowStep(1); setTimeout(() => pwInput.focus(), 50);
 });
 
 document.getElementById('pwAnalyze').addEventListener('click', () => {
-  if (!unlockedText) return;
+  if (!unlockedPdf) return;
   pwModal.classList.remove('visible');
   showLoading();
-  analyzeStatement(pendingFile, unlockedText, 'pdf').catch(e => { hideLoading(); showError(e.message || 'Could not analyze this statement.'); });
-  unlockedText = null;
+  const pdf = unlockedPdf;
+  unlockedPdf = null;
+  analyzeStatement(pendingFile, pdf.content, 'pdf', pdf.layout).catch(e => { hideLoading(); showError(e.message || 'Could not analyze this statement.'); });
 });
 
 async function verifyPassword() {
@@ -451,7 +455,7 @@ async function verifyPassword() {
   pwShowStep(2);
   try {
     const pdf = await extractPdfText(pendingAB, pw);
-    unlockedText = pdf.content;
+    unlockedPdf = pdf;
     document.getElementById('pwPageCount').textContent =
       `${pdf.pages} page${pdf.pages !== 1 ? 's' : ''} extracted · Ready to analyze`;
     pwShowStep(3);
@@ -470,7 +474,7 @@ function shakePw(msg) {
 
 function openPwModal(file) {
   document.getElementById('pwFilename').textContent = file.name;
-  pwInput.value = ''; pwInput.classList.remove('error-shake'); unlockedText = null;
+  pwInput.value = ''; pwInput.classList.remove('error-shake'); unlockedPdf = null;
   pwHint.innerHTML = 'Common formats: <strong>DDMMYYYY</strong> (DOB) · Last 4 digits of mobile · Account number';
   pwShowStep(1);
   pwModal.classList.add('visible');
@@ -482,14 +486,36 @@ function hideError() { document.getElementById('errorBanner').classList.remove('
 async function handleFile(file) {
   hideError();
   const ext = file.name.split('.').pop().toLowerCase();
-  if(!['pdf','csv'].includes(ext)) { showError('Choose a PDF or CSV file. Excel files are not supported yet.'); return; }
+  const textFormats = ['csv','txt','tsv'];
+  const spreadsheetFormats = ['xls','xlsx','xlsm'];
+  if(!['pdf', ...textFormats, ...spreadsheetFormats].includes(ext)) {
+    showError('Choose a PDF, CSV, TXT, TSV, XLS, XLSX, or XLSM file.'); return;
+  }
   if(file.size > 15 * 1024 * 1024) { showError('This file is larger than 15 MB. Export a smaller date range and try again.'); return; }
   try {
-    if(ext === 'csv') {
+    if(textFormats.includes(ext)) {
       const text = await readText(file);
-      if (!text.trim()) throw new Error('This CSV is empty.');
+      if (!text.trim()) throw new Error('This file is empty.');
       showLoading();
-      analyzeStatement(file, text, 'csv').catch(e => { hideLoading(); showError(e.message || 'Could not analyze this statement.'); });
+      analyzeStatement(file, text, ext === 'csv' ? 'csv' : 'text').catch(e => { hideLoading(); showError(e.message || 'Could not analyze this statement.'); });
+      return;
+    }
+    if(spreadsheetFormats.includes(ext)) {
+      if(typeof XLSX === 'undefined') throw new Error('Excel support could not load. Check your internet connection and refresh the page.');
+      showLoading();
+      const workbook = XLSX.read(await readAB(file), {type:'array', cellDates:true});
+      let sheetText = '';
+      for(const name of workbook.SheetNames) {
+        const candidate = XLSX.utils.sheet_to_csv(workbook.Sheets[name], {blankrows:false});
+        if(!candidate.trim()) continue;
+        try {
+          parseCsvTransactions(candidate);
+          sheetText = candidate;
+          break;
+        } catch (_) {}
+      }
+      if(!sheetText) throw new Error('No transaction table was found in this workbook. Include Date, Description, and Debit/Credit or Amount columns.');
+      analyzeStatement(file, sheetText, 'csv').catch(e => { hideLoading(); showError(e.message || 'Could not analyze this spreadsheet.'); });
       return;
     }
     const ab = await readAB(file);
@@ -498,22 +524,27 @@ async function handleFile(file) {
     const pdf = await extractPdfText(pendingAB, null);
     if (!pdf.content.trim()) throw new Error('No selectable text found. Try exporting the statement as CSV.');
     showLoading();
-    analyzeStatement(file, pdf.content, 'pdf').catch(e => { hideLoading(); showError(e.message || 'Could not analyze this PDF.'); });
+    analyzeStatement(file, pdf.content, 'pdf', pdf.layout).catch(e => { hideLoading(); showError(e.message || 'Could not analyze this PDF.'); });
   } catch(e) {
+    hideLoading();
     if(e.name === 'PasswordException') openPwModal(file);
     else showError(e.message || 'Could not read this file. Try exporting it as CSV.');
   }
 }
 
-function pageLines(items) {
+function groupPdfItems(items) {
   const rows=[];
   items.forEach(item=>{
     const y=Math.round(item.transform[5]);
     let row=rows.find(r=>Math.abs(r.y-y)<=2);
     if(!row){row={y,items:[]};rows.push(row);}
-    row.items.push(item);
+    row.items.push({str:item.str||'',x:item.transform[4]||0,width:item.width||0});
   });
-  return rows.sort((a,b)=>b.y-a.y).map(row=>row.items.sort((a,b)=>a.transform[4]-b.transform[4]).map(i=>i.str).join(' ')).join('\n');
+  return rows.sort((a,b)=>b.y-a.y).map(row=>({...row,items:row.items.sort((a,b)=>a.x-b.x)}));
+}
+
+function pageLines(rows) {
+  return rows.map(row=>row.items.map(i=>i.str).join(' ')).join('\n');
 }
 
 async function extractPdfText(bytes, password) {
@@ -521,13 +552,15 @@ async function extractPdfText(bytes, password) {
   const data = bytes instanceof Uint8Array ? bytes.slice() : new Uint8Array(bytes);
   const task = pdfjsLib.getDocument({ data, password: password || undefined });
   const pdf = await task.promise;
-  const pages = [];
+  const pages = [], layout=[];
   for(let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const tc = await page.getTextContent();
-    pages.push(pageLines(tc.items));
+    const rows=groupPdfItems(tc.items);
+    layout.push(rows);
+    pages.push(pageLines(rows));
   }
-  return { content: pages.join('\n'), pages: pdf.numPages };
+  return { content: pages.join('\n\f\n'), pages: pdf.numPages, layout };
 }
 
 function readText(f) { return new Promise((res,rej) => { const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=()=>rej(new Error('Read failed')); r.readAsText(f); }); }
@@ -574,9 +607,17 @@ function resetApp() {
 }
 
 // Local statement analysis. Statement data stays in this browser.
-async function analyzeStatement(file, content, type) {
+async function analyzeStatement(file, content, type, pdfLayout) {
   hideError();
-  const txns = type === 'pdf' ? parsePdfTransactions(content) : parseCsvTransactions(content);
+  let txns;
+  if(type === 'pdf') txns = parsePdfTransactions(content, pdfLayout);
+  else if(type === 'text') {
+    try { txns = parseCsvTransactions(content); }
+    catch (csvError) {
+      txns = parsePdfTransactions(content);
+      if(!txns.length) throw new Error('Could not recognize this text file. Use CSV/TSV columns or text with one transaction per line.');
+    }
+  } else txns = parseCsvTransactions(content);
   if (!txns.length) throw new Error('No transactions were recognized. Try a CSV with Date, Description, Debit and Credit columns.');
   renderResults(buildAnalysis(txns, content), file.name);
   hideLoading();
@@ -644,21 +685,143 @@ function parseAmount(value) {
   const negative=/^-|\(|\bDR\b/i.test(raw), n=Number(raw.replace(/[₹,\sA-Za-z()]/g,''));
   return Number.isFinite(n)?(negative?-Math.abs(n):Math.abs(n)):0;
 }
-function parsePdfTransactions(text) {
-  const result=[], dateRe=/^\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4})\s+(.*)$/;
-  String(text).split('\n').forEach(line=>{
-    const m=line.match(dateRe);if(!m)return;const date=parseDate(m[1]);if(!date)return;
-    const tail=m[2], tokens=[...tail.matchAll(/-?\d[\d,]*(?:\.\d{1,2})?/g)];if(!tokens.length)return;
-    const description=tail.slice(0,tokens[0].index).replace(/\s+/g,' ').trim();if(!description)return;
-    const values=tokens.map(t=>parseAmount(t[0])), dir=tail.toLowerCase();
-    let debit=0,credit=0,balance=null;
-    if(values.length>=3){debit=values[values.length-3]||0;credit=values[values.length-2]||0;balance=values[values.length-1]||null;}
-    else if(/salary|deposit|refund|credit|(^|\W)cr($|\W)/.test(dir)){credit=values[0]||0;if(values.length>1)balance=values[1];}
-    else if(/upi|purchase|payment|withdraw|debit|(^|\W)dr($|\W)/.test(dir)){debit=values[0]||0;if(values.length>1)balance=values[1];}
-    if(debit>0)result.push({date,description,amount:debit,type:'debit',balance});
-    if(credit>0)result.push({date,description,amount:credit,type:'credit',balance});
+function pdfColumnHeader(pageRows) {
+  for(const row of pageRows){
+    const label=row.items.map(i=>i.str).join(' ').toLowerCase();
+    if(!/\bdate\b/.test(label)||!/(narration|description|particular)/.test(label)||!/(withdrawal|debit)/.test(label)||!/(deposit|credit)/.test(label)||!/balance/.test(label))continue;
+    const xFor=re=>row.items.find(i=>re.test(i.str))?.x;
+    const debitLabel=row.items.find(i=>/withdrawal|debit/i.test(i.str));
+    const creditLabel=row.items.find(i=>/deposit|credit/i.test(i.str));
+    const amountAnchor=(labelItem,nextX)=>{
+      if(!labelItem)return undefined;
+      const amountItem=row.items.find(i=>i.x>labelItem.x&&i.x<nextX&&/^amt\.?$/i.test(i.str.trim()));
+      if(amountItem)return amountItem.x;
+      const amtIndex=labelItem.str.toLowerCase().indexOf('amt');
+      return labelItem.x+(labelItem.width||0)*(amtIndex>=0?amtIndex/labelItem.str.length:0.72);
+    };
+    const columns={
+      date:xFor(/^date\b/i),
+      narration:xFor(/narration|description|particular/i),
+      reference:xFor(/chq|ref\.?/i),
+      valueDate:xFor(/value/i),
+      debit:amountAnchor(debitLabel,creditLabel?.x??Infinity),
+      credit:amountAnchor(creditLabel,xFor(/balance/i)??Infinity),
+      balance:xFor(/balance/i)
+    };
+    if(columns.reference!==undefined&&columns.valueDate!==undefined&&columns.debit!==undefined&&columns.credit!==undefined&&columns.balance!==undefined)return columns;
+  }
+  return null;
+}
+function parsePdfLayout(layout) {
+  if(!Array.isArray(layout))return [];
+  const dateRe=/^\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4})\b/;
+  let columns=null;
+  const result=[];
+  layout.forEach(pageRows=>{
+    columns=pdfColumnHeader(pageRows)||columns;
+    if(!columns)return;
+    const dateLimit=columns.date+30;
+    const descriptionLimit=columns.reference-5;
+    const amountLimit=columns.valueDate+35;
+    let current=null;
+    const flush=()=>{
+      if(!current)return;
+      current.description=current.description.replace(/\s+/g,' ').trim();
+      if(current.description&&current.debit>0)result.push({date:current.date,description:current.description,amount:current.debit,type:'debit',balance:current.balance});
+      if(current.description&&current.credit>0)result.push({date:current.date,description:current.description,amount:current.credit,type:'credit',balance:current.balance});
+      current=null;
+    };
+    pageRows.forEach(row=>{
+      const line=row.items.map(i=>i.str).join(' ').trim();
+      if(/^\s*date\b.*\bnarration\b/i.test(line)||/opening balance|closing balance|total debits|total credits|^\s*page\s+\d/i.test(line)){flush();return;}
+      const dateCell=row.items.map(item=>({item,match:item.str.match(dateRe)})).find(({item,match})=>match&&item.x<dateLimit);
+      if(dateCell){
+        flush();
+        const date=parseDate(dateCell.match[1]);
+        if(date)current={date,description:dateCell.item.str.slice(dateCell.match[1].length),debit:0,credit:0,balance:null,descriptionStart:dateCell.item.x+dateCell.item.width+2};
+      }
+      if(!current)return;
+      row.items.forEach(item=>{
+        if(dateCell&&item===dateCell.item)return;
+        const value=String(item.str||'').trim();
+        if(!value)return;
+        if(item.x>=current.descriptionStart&&item.x<descriptionLimit&&!/^[-+\d₹]/.test(value)){
+          current.description+=' '+value;
+          return;
+        }
+        if(item.x<amountLimit||!/^[-+₹(\d]/.test(value)||!/[\d]/.test(value))return;
+        const amount=parseAmount(value);
+        const candidates=[['debit',columns.debit],['credit',columns.credit],['balance',columns.balance]];
+        const [column]=candidates.sort((a,b)=>Math.abs(item.x-a[1])-Math.abs(item.x-b[1]))[0];
+        if(column==='debit')current.debit+=amount;
+        else if(column==='credit')current.credit+=amount;
+        else current.balance=(current.balance||0)+amount;
+      });
+    });
+    flush();
   });
+  result.sort((a,b)=>a.date-b.date);
   return result;
+}
+function parsePdfTransactions(text, layout) {
+  const layoutTransactions=parsePdfLayout(layout);
+  if(layoutTransactions.length)return layoutTransactions;
+  const result=[], dateRe=/^\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4})\s+(.*)$/;
+  const anyDateRe=/\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4})\b/g;
+  const separateColumns=/\b(withdrawal|debit)\b/i.test(text)&&/\b(deposit|credit)\b/i.test(text)&&/\bbalance\b/i.test(text);
+  const rows=[];
+  String(text).split(/\f/).forEach(page=>{
+    let current=null;
+    const flush=()=>{if(current){rows.push(current);current=null;}};
+    page.split('\n').forEach(line=>{
+      const trimmed=line.trim();
+      if(/^(date\s+narration|opening balance|closing balance|total debits|total credits|page\s+\d)/i.test(trimmed)){flush();return;}
+      const m=line.match(dateRe);
+      if(m){
+        // Some PDF extractors put the value date on its own line. Keep a date-only
+        // continuation with the current transaction instead of treating it as a new row.
+        if(current&&!/[A-Za-z]/.test(m[2])){current.tail+=' '+trimmed;return;}
+        flush();
+        const date=parseDate(m[1]);
+        if(date)current={date,tail:m[2]};
+      } else if(current&&trimmed) current.tail+=' '+trimmed;
+    });
+    flush();
+  });
+  rows.forEach(({date,tail})=>{
+    const dates=[...tail.matchAll(anyDateRe)];
+    const amountText=dates.length?tail.slice(dates[dates.length-1].index+dates[dates.length-1][0].length):tail;
+    const tokens=[...amountText.matchAll(/-?\d[\d,]*(?:\.\d{1,2})?/g)];if(!tokens.length)return;
+    const description=tail.slice(0,dates.length?dates[dates.length-1].index:tokens[0].index).replace(/\s+/g,' ').trim();if(!description)return;
+    const values=tokens.map(t=>parseAmount(t[0]));
+    let debit=0,credit=0,balance=null,untypedAmount=0;
+    if(separateColumns&&values.length>=3){debit=values[values.length-3]||0;credit=values[values.length-2]||0;balance=values[values.length-1]||null;}
+    else if(separateColumns&&values.length===2){untypedAmount=values[0]||0;balance=values[1]||null;}
+    else if(values.length>=3){debit=values[values.length-3]||0;credit=values[values.length-2]||0;balance=values[values.length-1]||null;}
+    else if(values.length===2){
+      balance=values[1]||null;
+      if(/salary|deposit|refund|credit|(^|\W)cr($|\W)/i.test(description))credit=values[0]||0;
+      else if(/upi|purchase|payment|withdraw|debit|(^|\W)dr($|\W)/i.test(description))debit=values[0]||0;
+      else untypedAmount=values[0]||0;
+    } else if(/salary|deposit|refund|credit|(^|\W)cr($|\W)/i.test(description))credit=values[0]||0;
+    else if(/upi|purchase|payment|withdraw|debit|(^|\W)dr($|\W)/i.test(description))debit=values[0]||0;
+    const txn={date,description,balance,debit,credit,untypedAmount};
+    if(debit>0)result.push({...txn,amount:debit,type:'debit'});
+    else if(credit>0)result.push({...txn,amount:credit,type:'credit'});
+    else if(untypedAmount>0)result.push({...txn,amount:untypedAmount,type:'unknown'});
+  });
+  result.sort((a,b)=>a.date-b.date);
+  result.forEach((txn,index)=>{
+    if(txn.type!=='unknown')return;
+    const prev=result.slice(0,index).reverse().find(t=>t.balance>0);
+    if(prev&&txn.balance>0){
+      const movement=txn.balance-prev.balance;
+      if(movement<0)txn.type='debit';
+      else if(movement>0)txn.type='credit';
+    }
+    if(txn.type==='unknown')txn.type=/salary|deposit|refund|credit|(^|\W)cr($|\W)/i.test(txn.description)?'credit':'debit';
+  });
+  return result.filter(t=>t.type!=='unknown').map(({untypedAmount,...txn})=>txn);
 }
 function categoryFor(description) {
   const d=String(description).toLowerCase();

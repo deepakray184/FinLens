@@ -17,8 +17,8 @@ The app is served from [`index.html`](index.html) in the repository root.
 
 ## Use FinLens
 
-1. Export your statement from your bank as a CSV file. CSV is recommended.
-2. Open FinLens and choose the CSV file.
+1. Export your statement from your bank. CSV is recommended; Excel workbooks (`.xls`, `.xlsx`, `.xlsm`), text files (`.txt`, `.tsv`), and text-based PDFs are also supported.
+2. Open FinLens and choose the statement file.
 3. Review the overview and use the tabs to explore yearly trends, income, spending categories, transactions, UPI activity, and insights.
 
 FinLens recognizes common column names, including:
@@ -28,13 +28,13 @@ FinLens recognizes common column names, including:
 - **Amounts:** separate `Debit` and `Credit` columns, or an `Amount` column with a transaction type such as `Type` or `Dr/Cr`
 - **Optional:** `Balance`
 
-The CSV should include a header row and transaction dates in a recognizable format, such as `DD/MM/YYYY` or `YYYY-MM-DD`. If a file is not recognized, export it as CSV with the column headers included.
+CSV, TXT, and TSV files should include a header row and transaction dates in a recognizable format, such as `DD/MM/YYYY` or `YYYY-MM-DD`. Text files can use comma, semicolon, tab, or pipe separators. Excel files should contain a worksheet with the same transaction columns; FinLens looks through the workbook sheets for a recognizable table. If a file is not recognized, export it as CSV with the column headers included.
 
 Text-based PDFs are supported experimentally. Scanned PDFs and image-only statements are not supported because FinLens does not include OCR. Password-protected PDFs can be unlocked in the browser.
 
 ## Privacy
 
-Statement files are read and analyzed in your browser; FinLens does not send transaction data to a backend or store it on a server. The page loads its fonts and PDF.js (used for PDF reading) from public CDNs. For the best privacy, use a trusted device and a CSV exported directly from your bank.
+Statement files are read and analyzed in your browser; FinLens does not send transaction data to a backend or store it on a server. The page loads its fonts, PDF.js, and SheetJS (used for reading Excel files) from public CDNs. For the best privacy, use a trusted device and a statement file exported directly from your bank.
 
 ## Development
 
